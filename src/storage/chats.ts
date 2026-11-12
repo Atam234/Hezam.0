@@ -1,0 +1,48 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import type { SpecialistId } from '../router/router';
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** Assistant messages: who answered and why. */
+  specialist?: SpecialistId;
+  modelId?: string;
+  matched?: string[];
+  fallback?: boolean;
+  manual?: boolean;
+  tokensPerSecond?: number;
+  error?: boolean;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messages: Message[];
+}
+
+const KEY = 'hezam.conversations.v1';
+const MAX_CONVERSATIONS = 50;
+
+export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export async function loadConversations(): Promise<Conversation[]> {
+  try {
+    const raw = await AsyncStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as Conversation[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveConversations(list: Conversation[]): Promise<void> {
+  const trimmed = [...list].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS);
+  await AsyncStorage.setItem(KEY, JSON.stringify(trimmed));
+}
+
+export function titleFrom(text: string): string {
+  const oneLine = text.replace(/\s+/g, ' ').trim();
+  return oneLine.length > 42 ? `${oneLine.slice(0, 42)}…` : oneLine || 'Bagong chat';
+}
