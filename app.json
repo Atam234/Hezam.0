@@ -30,7 +30,14 @@
     },
     "plugins": [
       "llama.rn",
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class com.rnllama.** { *; }"
+          }
+        }
+      ]
     ]
   }
 }
