@@ -43,10 +43,10 @@ const HISTORY_CHAR_BUDGET = 6000;
 const KEEP_AWAKE_TAG = 'hezam-download';
 
 const SUGGESTIONS: { specialist: SpecialistId; text: string }[] = [
-  { specialist: 'code', text: 'Gumawa ng Python script na nagre-rename ng maraming file' },
-  { specialist: 'writing', text: 'Isulat mo ako ng liham ng pasasalamat sa aking guro' },
-  { specialist: 'creative', text: 'Mag-brainstorm ng mga ideya para sa logo ng coffee shop' },
-  { specialist: 'reasoning', text: 'Magkano ang 15 porsyento ng 2,500? Ipakita ang hakbang' },
+  { specialist: 'code', text: 'Write a Python script that renames many files at once' },
+  { specialist: 'writing', text: 'Write a thank-you letter to my teacher' },
+  { specialist: 'creative', text: 'Brainstorm logo ideas for a coffee shop' },
+  { specialist: 'reasoning', text: 'What is 15 percent of 2,500? Show the steps' },
 ];
 
 function buildTurns(systemPrompt: string, history: Message[]): ChatTurn[] {
@@ -171,13 +171,13 @@ function Chat() {
       let final: Message = reply;
       try {
         if (engine.loadedModelId() !== pick.model.id) {
-          setStatus(`Nilo-load ang ${pick.model.name}…`);
+          setStatus(`Loading ${pick.model.name}…`);
           await engine.ensureLoaded(pick.model.id, downloads.modelPath(pick.model), (p) =>
-            setStatus(`Nilo-load ang ${pick.model.name}… ${Math.round(p * 100)}%`),
+            setStatus(`Loading ${pick.model.name}… ${Math.round(p * 100)}%`),
           );
           setLoadedId(pick.model.id);
         }
-        setStatus('Sumasagot…');
+        setStatus('Answering…');
 
         let lastPaint = 0;
         const result = await engine.generate(
@@ -193,14 +193,14 @@ function Chat() {
         );
         final = { ...reply, content: result.text.trim(), tokensPerSecond: result.tokensPerSecond };
         if (!splitThinking(final.content).answer) {
-          final = { ...final, error: true, content: 'Walang naisagot ang model. Subukan ulit.' };
+          final = { ...final, error: true, content: 'The model returned no answer. Please try again.' };
         }
       } catch (e) {
         setLoadedId(engine.loadedModelId());
         final = {
           ...reply,
           error: true,
-          content: `Hindi nakasagot ang ${pick.model.name}: ${errorText(e)}\n\nKung kulang sa RAM ang phone, subukan ang mas maliit na model.`,
+          content: `${pick.model.name} could not answer: ${errorText(e)}\n\nIf the phone is low on RAM, try a smaller model.`,
         };
       } finally {
         const done = [...base, final];
@@ -251,7 +251,7 @@ function Chat() {
       try {
         await downloads.downloadModel(m, (f) => setProgress((p) => (m.id in p ? { ...p, [m.id]: f } : p)));
       } catch (e) {
-        Alert.alert('Hindi na-download', `${m.name}: ${errorText(e)}`);
+        Alert.alert('Download failed', `${m.name}: ${errorText(e)}`);
       } finally {
         setProgress((p) => {
           const { [m.id]: _done, ...rest } = p;
@@ -284,9 +284,9 @@ function Chat() {
   const lastId = messages[messages.length - 1]?.id;
   const loadedModel = loadedId ? getModel(loadedId) : undefined;
   const subtitle = useMemo(() => {
-    if (engine.isDemo) return 'web preview · demo lang';
+    if (engine.isDemo) return 'web preview · demo only';
     if (loadedModel) return `${loadedModel.name} · offline`;
-    return installed.size ? 'offline · local AI' : 'walang model pa';
+    return installed.size ? 'offline · local AI' : 'no model yet';
   }, [installed.size, loadedModel]);
 
   return (
@@ -337,12 +337,12 @@ function Chat() {
               Hezam<Text style={styles.brandDim}>.0</Text>
             </Text>
             <Text style={styles.heroTag}>
-              Isang assistant, maraming eksperto.{'\n'}Kusang pumipili ng tamang local AI model sa bawat tanong.
+              One assistant, many experts.{'\n'}Automatically picks the right local AI model for every question.
             </Text>
             {installed.size === 0 ? (
               <Pressable style={styles.cta} onPress={() => setShowModels(true)} accessibilityRole="button">
-                <Text style={styles.ctaTitle}>Mag-download ng unang model</Text>
-                <Text style={styles.ctaText}>Kailangan ng kahit isang model para makapag-chat offline.</Text>
+                <Text style={styles.ctaTitle}>Download your first model</Text>
+                <Text style={styles.ctaText}>You need at least one model to chat offline.</Text>
               </Pressable>
             ) : (
               <View style={styles.suggestions}>
@@ -406,7 +406,7 @@ function Chat() {
               style={styles.input}
               value={input}
               onChangeText={setInput}
-              placeholder="Magtanong kahit ano…"
+              placeholder="Ask anything…"
               placeholderTextColor={colors.textFaint}
               multiline
               accessibilityLabel="Message"

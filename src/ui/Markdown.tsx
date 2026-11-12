@@ -91,7 +91,7 @@ function CodeBlock({ lang, text }: { lang: string; text: string }) {
       <View style={styles.codeHeader}>
         <Text style={styles.codeLang}>{lang || 'code'}</Text>
         <Pressable onPress={copy} hitSlop={10} accessibilityRole="button" accessibilityLabel="Copy code">
-          <Text style={styles.codeCopy}>{copied ? 'Nakopya ✓' : 'Kopyahin'}</Text>
+          <Text style={styles.codeCopy}>{copied ? 'Copied ✓' : 'Copy'}</Text>
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>

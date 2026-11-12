@@ -1,26 +1,26 @@
 # Hezam.0
 
-Local AI assistant para sa mobile. Isang chat, maraming eksperto: kusang pinipili ng app
-kung aling **on-device AI model** ang sasagot base sa tanong mo — coding, pagsusulat,
-art at ideya, math at reasoning, o pangkalahatang usapan. Lahat ng sagot ay ginagawa sa
-mismong phone; internet ang kailangan sa pag-download ng model lang.
+A local AI assistant for mobile. One chat, many experts: the app automatically picks which
+**on-device AI model** answers, based on your question — coding, writing, art and ideas,
+math and reasoning, or general conversation. Every answer is generated on the phone itself;
+internet is only needed to download models.
 
-## Paano ito gumagana
+## How it works
 
-1. **Router** (`src/router/router.ts`) — sinusuri ang mensahe (English, Tagalog, Taglish)
-   gamit ang mga keyword at pattern at pumipili ng specialist. Walang model inference ang
-   routing kaya instant ito at walang dagdag na RAM. Ang maikling follow-up ("ayusin mo pa")
-   ay nananatili sa dating specialist.
-2. **Model picker** — hinahanap ang naka-install na model para sa specialist na iyon. Kung
-   wala pa, gagamit ng pinakamalapit na pamalit at sasabihin ito sa chat.
-3. **Engine** (`src/engine/engine.ts`) — nilo-load ang model sa llama.cpp at nag-i-stream ng
-   sagot. Isang model lang ang nasa memory; pinapalitan kapag nagbago ang specialist.
+1. **Router** (`src/router/router.ts`) — scores the message (English, Tagalog, Taglish)
+   against keywords and patterns and picks a specialist. Routing uses no model inference,
+   so it is instant and costs no extra RAM. A short follow-up ("fix it more") stays with
+   the previous specialist.
+2. **Model picker** — finds an installed model for that specialist. If it is not installed
+   yet, the closest stand-in is used and the chat says so.
+3. **Engine** (`src/engine/engine.ts`) — loads the model in llama.cpp and streams the
+   answer. Only one model is in memory; it is swapped when the specialist changes.
 
-Puwede ring i-override ang Auto gamit ang mga chip sa itaas ng message box.
+You can override Auto with the chips above the message box.
 
-## Mga specialist at model
+## Specialists and models
 
-| Specialist | Model | Laki | Hugging Face |
+| Specialist | Model | Size | Hugging Face |
 | --- | --- | --- | --- |
 | General Assistant | Qwen2.5 1.5B Instruct | 1.12 GB | `Qwen/Qwen2.5-1.5B-Instruct-GGUF` |
 | Coding Expert | Qwen2.5-Coder 1.5B | 1.12 GB | `Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF` |
@@ -29,25 +29,24 @@ Puwede ring i-override ang Auto gamit ang mga chip sa itaas ng message box.
 | Reasoning & Math | DeepSeek-R1 Distill 1.5B | 1.12 GB | `bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF` |
 | General (lite) | SmolLM2 360M | 271 MB | `bartowski/SmolLM2-360M-Instruct-GGUF` |
 
-Lahat ay Q4_K_M GGUF. Dina-download sa loob ng app (**Models**), hindi kasama sa APK.
-Para magdagdag o magpalit ng model, i-edit ang `src/models/catalog.ts`.
+All are Q4_K_M GGUF files. They are downloaded inside the app (**Models**), not bundled in
+the APK. To add or swap a model, edit `src/models/catalog.ts`.
 
-Ang "Art & Ideas" ay text model: nagbibigay ito ng art concepts at image prompts, hindi ito
-gumagawa ng mismong larawan.
+"Art & Ideas" is a text model: it produces art concepts and image prompts, not images.
 
-## Teknolohiya (open source)
+## Technology (open source)
 
 - [Expo](https://github.com/expo/expo) / [React Native](https://github.com/facebook/react-native) — app framework
-- [llama.rn](https://github.com/mybigday/llama.rn) — React Native binding ng
-  [llama.cpp](https://github.com/ggml-org/llama.cpp) para sa on-device inference
-- GGUF models mula sa [Hugging Face](https://huggingface.co/models?library=gguf)
+- [llama.rn](https://github.com/mybigday/llama.rn) — React Native binding of
+  [llama.cpp](https://github.com/ggml-org/llama.cpp) for on-device inference
+- GGUF models from [Hugging Face](https://huggingface.co/models?library=gguf)
 
-## Pag-install sa Android
+## Installing on Android
 
-Bawat push ay nagbi-build ng APK sa GitHub Actions (workflow na **Android APK**). Buksan ang
-pinakabagong run sa tab na *Actions*, i-download ang artifact na `Hezam.0-apk`, i-unzip, at
-i-install ang `app-release.apk` sa phone (arm64). Debug-signed ito: ayos para sa sariling
-gamit, pero kailangan ng sariling signing key bago i-publish sa Play Store.
+Every push builds an APK in GitHub Actions (the **Android APK** workflow, about 55 minutes).
+Open the latest run in the *Actions* tab, download the `Hezam.0-apk` artifact, unzip it, and
+install `app-release.apk` on the phone (arm64). It is debug-signed: fine for personal use,
+but it needs its own signing key before publishing to the Play Store.
 
 ## Development
 
@@ -55,6 +54,6 @@ gamit, pero kailangan ng sariling signing key bago i-publish sa Play Store.
 npm install
 npm test             # router unit tests
 npm run typecheck
-npx expo run:android # kailangan ng Android SDK; hindi gagana sa Expo Go (may native code)
-npm run web          # UI preview lang: demo ang sagot, walang AI sa browser
+npx expo run:android # needs the Android SDK; will not work in Expo Go (native code)
+npm run web          # UI preview only: answers are a demo, no AI runs in the browser
 ```

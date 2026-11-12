@@ -19,16 +19,16 @@ export function HistorySheet({ visible, onClose, conversations, currentId, onOpe
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
       <SafeAreaView style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>Mga Chat</Text>
+          <Text style={styles.title}>Chats</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
-            <Text style={styles.close}>Tapos</Text>
+            <Text style={styles.close}>Done</Text>
           </Pressable>
         </View>
         <FlatList
           data={sorted}
           keyExtractor={(c) => c.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.empty}>Wala pang naka-save na chat.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>No saved chats yet.</Text>}
           renderItem={({ item }) => (
             <View style={[styles.row, item.id === currentId && styles.rowActive]}>
               <Pressable style={styles.rowMain} onPress={() => onOpen(item.id)} accessibilityRole="button">
@@ -36,7 +36,7 @@ export function HistorySheet({ visible, onClose, conversations, currentId, onOpe
                   {item.title}
                 </Text>
                 <Text style={styles.rowMeta}>
-                  {new Date(item.updatedAt).toLocaleDateString()} · {item.messages.length} mensahe
+                  {new Date(item.updatedAt).toLocaleDateString()} · {item.messages.length} messages
                 </Text>
               </Pressable>
               <Pressable
@@ -45,7 +45,7 @@ export function HistorySheet({ visible, onClose, conversations, currentId, onOpe
                 accessibilityRole="button"
                 accessibilityLabel="Delete chat"
               >
-                <Text style={styles.delete}>Burahin</Text>
+                <Text style={styles.delete}>Delete</Text>
               </Pressable>
             </View>
           )}

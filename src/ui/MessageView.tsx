@@ -33,10 +33,10 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
   const model = message.modelId ? getModel(message.modelId) : undefined;
   const { answer, thinking } = splitThinking(message.content);
   const why = message.manual
-    ? 'pinili mo'
+    ? 'you chose this'
     : message.matched?.length
       ? message.matched.slice(0, 2).join(', ')
-      : 'pangkalahatang tanong';
+      : 'general question';
 
   const copy = async () => {
     await Clipboard.setStringAsync(answer);
@@ -59,7 +59,7 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
       </View>
       <Text style={styles.why}>
         Auto-route: {why}
-        {message.fallback ? ' · pansamantalang model (wala pa ang specialist)' : ''}
+        {message.fallback ? ' · stand-in model (specialist not installed)' : ''}
       </Text>
 
       {message.error ? (
@@ -69,11 +69,11 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
       ) : null}
 
       {status || thinking ? (
-        <Text style={styles.status}>{thinking ? 'Nag-iisip…' : status}</Text>
+        <Text style={styles.status}>{thinking ? 'Thinking…' : status}</Text>
       ) : !message.error && answer ? (
         <View style={styles.footer}>
           <Pressable onPress={copy} hitSlop={10} accessibilityRole="button" accessibilityLabel="Copy answer">
-            <Text style={styles.footerText}>{copied ? 'Nakopya ✓' : 'Kopyahin'}</Text>
+            <Text style={styles.footerText}>{copied ? 'Copied ✓' : 'Copy'}</Text>
           </Pressable>
           {message.tokensPerSecond ? (
             <Text style={styles.footerText}>{message.tokensPerSecond.toFixed(1)} tok/s · offline</Text>

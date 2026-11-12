@@ -44,5 +44,5 @@ export async function saveConversations(list: Conversation[]): Promise<void> {
 
 export function titleFrom(text: string): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
-  return oneLine.length > 42 ? `${oneLine.slice(0, 42)}…` : oneLine || 'Bagong chat';
+  return oneLine.length > 42 ? `${oneLine.slice(0, 42)}…` : oneLine || 'New chat';
 }

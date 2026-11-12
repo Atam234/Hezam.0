@@ -35,8 +35,8 @@ export async function generate(
   const question = messages[messages.length - 1]?.content ?? '';
   const isCode = /coding specialist/.test(messages[0]?.content ?? '');
   const reply = isCode
-    ? `**Demo mode (web preview).** Sa totoong app, ang coding model ang sasagot dito nang offline.\n\n\`\`\`python\ndef greet(name):\n    return f"Kumusta, {name}!"\n\nprint(greet("Hezam"))\n\`\`\`\n\n- Tanong mo: *${question.slice(0, 80)}*`
-    : `**Demo mode (web preview).** Walang AI na tumatakbo sa browser. I-install ang app sa phone para sa totoong sagot mula sa local model.\n\nTanong mo: *${question.slice(0, 80)}*`;
+    ? `**Demo mode (web preview).** In the real app, the coding model answers here offline.\n\n\`\`\`python\ndef greet(name):\n    return f"Hello, {name}!"\n\nprint(greet("Hezam"))\n\`\`\`\n\n- You asked: *${question.slice(0, 80)}*`
+    : `**Demo mode (web preview).** No AI runs in the browser. Install the app on a phone for real answers from a local model.\n\nYou asked: *${question.slice(0, 80)}*`;
 
   let text = '';
   for (const word of reply.split(/(?<=\s)/)) {

@@ -24,16 +24,16 @@ export function ModelsSheet(props: Props) {
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
       <SafeAreaView style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>Mga AI Model</Text>
+          <Text style={styles.title}>AI Models</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
-            <Text style={styles.close}>Tapos</Text>
+            <Text style={styles.close}>Done</Text>
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.list}>
           <Text style={styles.intro}>
-            I-download ang mga specialist na gusto mo. Kapag na-download na, offline na silang tatakbo sa
-            phone mo at si Hezam.0 na ang pipili kung sino ang sasagot sa bawat tanong.
-            {freeBytes > 0 ? `\n\nBakanteng storage: ${formatSize(freeBytes)}` : ''}
+            Download the specialists you want. Once downloaded they run offline on your phone, and
+            Hezam.0 picks which one answers each question.
+            {freeBytes > 0 ? `\n\nFree storage: ${formatSize(freeBytes)}` : ''}
           </Text>
 
           {MODELS.map((m) => {
@@ -50,7 +50,7 @@ export function ModelsSheet(props: Props) {
                       {spec.glyph} {spec.name}
                     </Text>
                   </View>
-                  {loadedId === m.id && <Text style={styles.loaded}>● nasa memory</Text>}
+                  {loadedId === m.id && <Text style={styles.loaded}>● in memory</Text>}
                 </View>
                 <Text style={styles.name}>{m.name}</Text>
                 <Text style={styles.meta}>
@@ -68,19 +68,19 @@ export function ModelsSheet(props: Props) {
                     </View>
                     <Text style={styles.percent}>{Math.round(p * 100)}%</Text>
                     <Pressable onPress={() => props.onCancel(m)} hitSlop={10} accessibilityRole="button">
-                      <Text style={styles.danger}>Itigil</Text>
+                      <Text style={styles.danger}>Cancel</Text>
                     </Pressable>
                   </View>
                 ) : isInstalled ? (
                   <View style={styles.actions}>
-                    <Text style={styles.installed}>✓ Naka-install</Text>
+                    <Text style={styles.installed}>✓ Installed</Text>
                     <Pressable
                       onPress={() => props.onDelete(m)}
                       disabled={busy}
                       hitSlop={10}
                       accessibilityRole="button"
                     >
-                      <Text style={[styles.danger, busy && styles.disabled]}>Burahin</Text>
+                      <Text style={[styles.danger, busy && styles.disabled]}>Delete</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -91,18 +91,18 @@ export function ModelsSheet(props: Props) {
                       onPress={() => props.onDownload(m)}
                       accessibilityRole="button"
                     >
-                      <Text style={styles.buttonText}>I-download</Text>
+                      <Text style={styles.buttonText}>Download</Text>
                     </Pressable>
-                    {tooBig && <Text style={styles.warn}>Kulang ang storage</Text>}
+                    {tooBig && <Text style={styles.warn}>Not enough storage</Text>}
                   </View>
                 )}
               </View>
             );
           })}
           <Text style={styles.footnote}>
-            Ang mga model ay open-weight na GGUF mula sa Hugging Face at pinapatakbo ng llama.cpp (llama.rn).
-            Internet ang kailangan sa pag-download lang; ang chat ay hindi umaalis sa phone mo. Panatilihing
-            bukas ang app habang nagda-download.
+            Models are open-weight GGUF files from Hugging Face, run by llama.cpp (llama.rn). Internet is
+            only needed to download them; your chats never leave your phone. Keep the app open while
+            downloading.
           </Text>
         </ScrollView>
       </SafeAreaView>
