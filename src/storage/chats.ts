@@ -17,6 +17,8 @@ export interface Message {
   tokensPerSecond?: number;
   /** Set when the answer went through the translator. */
   translatedTo?: 'tl' | 'en';
+  /** Language the reply was written in. */
+  lang?: 'tl' | 'en';
   translatorId?: string;
   /** The untranslated answer, kept so the user can compare. */
   original?: string;

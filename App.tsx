@@ -22,6 +22,7 @@ import { splitThinking, type ChatTurn } from './src/engine/types';
 import {
   getModel,
   MODELS,
+  setCustomModels,
   pickTranslator,
   SPECIALIST_ORDER,
   SPECIALISTS,
@@ -46,6 +47,7 @@ import {
   type Conversation,
   type Message,
 } from './src/storage/chats';
+import { loadCustomModels, saveCustomModels, toModelInfo, type CustomModel } from './src/storage/customModels';
 import * as downloads from './src/storage/downloads';
 import {
   DEFAULT_SETTINGS,
@@ -61,8 +63,19 @@ import { HistorySheet } from './src/ui/HistorySheet';
 import { MessageView } from './src/ui/MessageView';
 import { ModelsSheet } from './src/ui/ModelsSheet';
 import { SettingsSheet } from './src/ui/SettingsSheet';
+import { VoiceSheet, type VoiceAnswer } from './src/ui/VoiceSheet';
 
 type Mode = 'auto' | SpecialistId;
+
+interface SendOptions {
+  /** Voice mode: keep answers short and plain, and report the answer as it streams. */
+  voice?: boolean;
+  onPartial?: (answer: string, lang: Lang) => void;
+}
+
+const VOICE_MAX_TOKENS = 384;
+const VOICE_HINT =
+  ' This is a spoken conversation: answer briefly in plain sentences, without Markdown, lists, or code unless asked.';
 
 const KEEP_AWAKE_TAG = 'hezam-download';
 
@@ -126,6 +139,15 @@ function Chat() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [googlePack, setGooglePack] = useState<google.PackState>('unavailable');
   const [packBusy, setPackBusy] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
+  const [custom, setCustom] = useState<CustomModel[]>([]);
+  const [importing, setImporting] = useState(false);
+
+  const models = useMemo(() => {
+    const imported = custom.map(toModelInfo);
+    setCustomModels(imported); // keep lookups by id in step with what is rendered
+    return [...imported, ...MODELS];
+  }, [custom]);
 
   const listRef = useRef<FlatList<Message>>(null);
   const followRef = useRef(true);
@@ -143,7 +165,12 @@ function Chat() {
     loadConversations().then(setConversations);
     loadSettings().then(setSettings);
     google.packState().then(setGooglePack);
-    refreshStorage();
+    // Imported models must be registered before the installed-files scan can find them.
+    loadCustomModels().then((list) => {
+      setCustomModels(list.map(toModelInfo));
+      setCustom(list);
+      refreshStorage();
+    });
     return () => {
       engine.unload().catch(() => {});
     };
@@ -165,12 +192,12 @@ function Chat() {
   }, []);
 
   const send = useCallback(
-    async (raw: string) => {
+    async (raw: string, opts: SendOptions = {}): Promise<Message | null> => {
       const text = raw.trim();
-      if (!text || generating) return;
+      if (!text || generating) return null;
       if (installed.size === 0) {
-        setShowModels(true);
-        return;
+        if (!opts.voice) setShowModels(true);
+        return null;
       }
 
       const history = messagesRef.current;
@@ -178,10 +205,10 @@ function Chat() {
       const manual = mode !== 'auto';
       const decision = manual ? null : classify(text, previous);
       const specialistId: SpecialistId = manual ? mode : decision!.specialist;
-      const pick = pickModel(specialistId, MODELS, installed);
+      const pick = pickModel(specialistId, models, installed);
       if (!pick) {
-        setShowModels(true);
-        return;
+        if (!opts.voice) setShowModels(true);
+        return null;
       }
       const specialist = SPECIALISTS[specialistId];
 
@@ -191,7 +218,9 @@ function Chat() {
         .map((m) => (m.role === 'user' ? detectLanguage(m.content) : 'unknown'))
         .find((l): l is Lang => l !== 'unknown');
       const target = targetLanguage(text, settings.replyLanguage, earlier);
-      const maxTokens = effectiveMaxTokens(settings);
+      const maxTokens = opts.voice
+        ? Math.min(effectiveMaxTokens(settings), VOICE_MAX_TOKENS)
+        : effectiveMaxTokens(settings);
       const ctx = settings.contextTokens;
 
       const load = async (m: ModelInfo) => {
@@ -257,15 +286,19 @@ function Chat() {
         };
         const result = await engine.generate(
           buildTurns(
-            `${specialist.systemPrompt} ${languageInstruction(modelLanguage)}`,
+            `${specialist.systemPrompt} ${languageInstruction(modelLanguage)}${opts.voice ? VOICE_HINT : ''}`,
             sent,
             historyCharBudget(settings),
             languageReminder(modelLanguage),
           ),
           { temperature: specialist.temperature, maxTokens },
-          paint,
+          (full) => {
+            paint(full);
+            // With the translator bridge the answer is still English here, so it is not spoken yet.
+            if (!bridge) opts.onPartial?.(splitThinking(full).answer, target);
+          },
         );
-        final = { ...reply, content: result.text.trim(), tokensPerSecond: result.tokensPerSecond };
+        final = { ...reply, content: result.text.trim(), tokensPerSecond: result.tokensPerSecond, lang: target };
         if (!splitThinking(final.content).answer) {
           final = { ...final, error: true, content: 'The model returned no answer. Please try again.' };
         } else if (bridge) {
@@ -317,8 +350,9 @@ function Chat() {
         setGenerating(false);
         persist(chatId, done);
       }
+      return final;
     },
-    [chatId, generating, installed, mode, patchMessage, persist, settings],
+    [chatId, generating, installed, mode, models, patchMessage, persist, settings],
   );
 
   const changeSettings = useCallback((next: Settings) => {
@@ -398,9 +432,55 @@ function Chat() {
         setLoadedId(null);
       }
       await downloads.deleteModel(m);
+      if (m.custom) {
+        setCustom((prev) => {
+          const next = prev.filter((c) => c.id !== m.id);
+          saveCustomModels(next).catch(() => {});
+          return next;
+        });
+      }
       refreshStorage();
     },
     [refreshStorage],
+  );
+
+  const importModel = useCallback(async () => {
+    setImporting(true);
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    try {
+      const id = `custom-${newId()}`;
+      const file = await downloads.importModel(id);
+      if (file) {
+        const next = [{ id, role: 'general' as SpecialistId, ...file }, ...custom];
+        setCustomModels(next.map(toModelInfo));
+        setCustom(next);
+        await saveCustomModels(next);
+      }
+    } catch (e) {
+      Alert.alert('Import failed', errorText(e));
+    } finally {
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
+      setImporting(false);
+      refreshStorage();
+    }
+  }, [custom, refreshStorage]);
+
+  const setModelRole = useCallback((m: ModelInfo, role: SpecialistId) => {
+    setCustom((prev) => {
+      const next = prev.map((c) => (c.id === m.id ? { ...c, role } : c));
+      saveCustomModels(next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const askByVoice = useCallback(
+    async (text: string, onPartial: (answer: string, lang: Lang) => void): Promise<VoiceAnswer | null> => {
+      const m = await send(text, { voice: true, onPartial });
+      if (!m) return null;
+      if (m.error) return { text: '', lang: m.lang ?? 'en', error: m.content };
+      return { text: splitThinking(m.content).answer, lang: m.lang ?? 'en' };
+    },
+    [send],
   );
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -443,7 +523,7 @@ function Chat() {
           accessibilityLabel="Manage AI models"
         >
           <Text style={styles.modelsPillText}>
-            Models {installed.size}/{MODELS.length}
+            Models {installed.size}/{models.length}
           </Text>
         </Pressable>
         <Pressable
@@ -547,6 +627,16 @@ function Chat() {
               multiline
               accessibilityLabel="Message"
             />
+            {!generating && (
+              <Pressable
+                style={styles.mic}
+                onPress={() => setShowVoice(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Voice mode"
+              >
+                <Text style={styles.micGlyph}>🎙</Text>
+              </Pressable>
+            )}
             {generating ? (
               <Pressable
                 style={styles.send}
@@ -582,6 +672,10 @@ function Chat() {
         onDownload={download}
         onCancel={(m) => downloads.cancelDownload(m)}
         onDelete={removeModel}
+        models={models}
+        importing={importing}
+        onImport={importModel}
+        onSetRole={setModelRole}
       />
       <SettingsSheet
         visible={showSettings}
@@ -592,6 +686,12 @@ function Chat() {
         googlePack={googlePack}
         packBusy={packBusy}
         onDownloadPack={downloadPack}
+      />
+      <VoiceSheet
+        visible={showVoice}
+        onClose={() => setShowVoice(false)}
+        voiceLanguage={settings.voiceLanguage}
+        onAsk={askByVoice}
       />
       <HistorySheet
         visible={showHistory}
@@ -698,6 +798,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mic: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micGlyph: { fontSize: 17 },
   sendDisabled: { opacity: 0.3 },
   sendArrow: { color: colors.onAccent, fontSize: 20, fontWeight: '800', lineHeight: 22 },
   stopSquare: { width: 12, height: 12, borderRadius: 2, backgroundColor: colors.onAccent },

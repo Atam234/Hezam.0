@@ -54,3 +54,16 @@ export async function cancelDownload(m: ModelInfo): Promise<void> {
 export async function deleteModel(m: ModelInfo): Promise<void> {
   write(read().filter((id) => id !== m.id));
 }
+
+export interface ImportedFile {
+  name: string;
+  file: string;
+  sizeBytes: number;
+}
+
+/** Web preview: pretends a model file was picked. */
+export async function importModel(id: string): Promise<ImportedFile | null> {
+  await new Promise((r) => setTimeout(r, 400));
+  write([...new Set([...read(), id])]);
+  return { name: 'my-model-Q4_K_M', file: `custom-${id}.gguf`, sizeBytes: 1_300_000_000 };
+}

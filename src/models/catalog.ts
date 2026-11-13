@@ -80,6 +80,8 @@ export interface ModelInfo extends RoutableModel {
   note: string;
   /** Lower is better at translating to/from Tagalog; absent means not suited to translate. */
   translatorRank?: number;
+  /** True for a GGUF file the user imported from their own storage. */
+  custom?: boolean;
 }
 
 /**
@@ -167,7 +169,17 @@ export const MODELS: ModelInfo[] = [
 export const modelUrl = (m: ModelInfo) =>
   `https://huggingface.co/${m.repo}/resolve/main/${m.file}?download=true`;
 
-export const getModel = (id: string) => MODELS.find((m) => m.id === id);
+let customModels: ModelInfo[] = [];
+
+/** Registers the user's imported models so routing and lookups can see them. */
+export function setCustomModels(list: ModelInfo[]): void {
+  customModels = list;
+}
+
+/** Imported models first, so the user's own pick for a specialist wins over the built-in one. */
+export const allModels = (): ModelInfo[] => [...customModels, ...MODELS];
+
+export const getModel = (id: string) => allModels().find((m) => m.id === id);
 
 export function formatSize(bytes: number): string {
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`;

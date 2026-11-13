@@ -2,15 +2,18 @@ import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import appConfig from '../../app.json';
-import type { ReplyLanguageSetting } from '../router/language';
+import type { Lang, ReplyLanguageSetting } from '../router/language';
 import {
   CONTEXT_OPTIONS,
   DEFAULT_SETTINGS,
   effectiveMaxTokens,
-  MAX_TOKEN_OPTIONS,
+  MAX_TOKENS_MAX,
+  MAX_TOKENS_MIN,
+  MAX_TOKENS_STEP,
   type Settings,
 } from '../storage/settings';
 import { colors } from '../theme';
+import { Slider } from './Slider';
 
 interface Props {
   visible: boolean;
@@ -27,6 +30,11 @@ interface Props {
 
 const LANGUAGES: { value: ReplyLanguageSetting; label: string }[] = [
   { value: 'auto', label: 'Auto' },
+  { value: 'tl', label: 'Tagalog' },
+  { value: 'en', label: 'English' },
+];
+
+const VOICE_LANGUAGES: { value: Lang; label: string }[] = [
   { value: 'tl', label: 'Tagalog' },
   { value: 'en', label: 'English' },
 ];
@@ -121,18 +129,42 @@ export function SettingsSheet(props: Props) {
             )}
           </View>
 
-          <Text style={styles.section}>Tokens</Text>
+          <Text style={styles.section}>Voice</Text>
           <View style={styles.card}>
-            <Text style={styles.label}>Max reply tokens</Text>
+            <Text style={styles.label}>Voice language</Text>
             <Text style={styles.help}>
-              How long an answer can be. Higher allows longer answers but takes more time. About 4 tokens is
-              3 words.
+              The language the microphone listens for in Voice mode. Answers are read aloud in the language
+              of the reply.
             </Text>
             <Segmented
-              options={MAX_TOKEN_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
-              value={settings.maxTokens}
-              onSelect={(v) => set({ maxTokens: v })}
+              options={VOICE_LANGUAGES}
+              value={settings.voiceLanguage}
+              onSelect={(v) => set({ voiceLanguage: v })}
             />
+          </View>
+
+          <Text style={styles.section}>Tokens</Text>
+          <View style={styles.card}>
+            <View style={styles.sliderHead}>
+              <Text style={styles.label}>Max output tokens</Text>
+              <Text style={styles.sliderValue}>{settings.maxTokens}</Text>
+            </View>
+            <Text style={styles.help}>
+              Slide to set how long an answer can be. Higher allows longer answers but takes more time.
+              About 4 tokens is 3 words.
+            </Text>
+            <Slider
+              value={settings.maxTokens}
+              min={MAX_TOKENS_MIN}
+              max={MAX_TOKENS_MAX}
+              step={MAX_TOKENS_STEP}
+              onChange={(v) => set({ maxTokens: v })}
+              accessibilityLabel="Max output tokens"
+            />
+            <View style={styles.sliderEnds}>
+              <Text style={styles.sliderEnd}>{MAX_TOKENS_MIN}</Text>
+              <Text style={styles.sliderEnd}>{MAX_TOKENS_MAX}</Text>
+            </View>
             {capped && (
               <Text style={styles.warn}>
                 Limited to {effectiveMaxTokens(settings)} by the context size below. Raise the context to use
@@ -192,6 +224,10 @@ const styles = StyleSheet.create({
   packButton: { backgroundColor: colors.accent, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   packButtonBusy: { opacity: 0.5 },
   packButtonText: { color: colors.onAccent, fontWeight: '700', fontSize: 13 },
+  sliderHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  sliderValue: { color: colors.text, fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  sliderEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -6 },
+  sliderEnd: { color: colors.textFaint, fontSize: 12, fontVariant: ['tabular-nums'] },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 6 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   switchText: { flex: 1, gap: 6 },

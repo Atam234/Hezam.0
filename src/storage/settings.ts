@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { ReplyLanguageSetting } from '../router/language';
+import type { Lang, ReplyLanguageSetting } from '../router/language';
 
 export interface Settings {
   /** Language of replies: follow the user, or always one language. */
@@ -11,16 +11,21 @@ export interface Settings {
   maxTokens: number;
   /** Model context window, in tokens. Larger remembers more but needs more RAM. */
   contextTokens: number;
+  /** Language the microphone listens for in Voice mode. */
+  voiceLanguage: Lang;
 }
 
-export const MAX_TOKEN_OPTIONS = [256, 512, 1024, 2048, 4096];
-export const CONTEXT_OPTIONS = [2048, 4096, 8192];
+export const MAX_TOKENS_MIN = 64;
+export const MAX_TOKENS_MAX = 8192;
+export const MAX_TOKENS_STEP = 64;
+export const CONTEXT_OPTIONS = [2048, 4096, 8192, 16384];
 
 export const DEFAULT_SETTINGS: Settings = {
   replyLanguage: 'auto',
   autoTranslate: true,
   maxTokens: 1024,
   contextTokens: 4096,
+  voiceLanguage: 'tl',
 };
 
 const KEY = 'hezam.settings.v1';

@@ -38,7 +38,23 @@ translating with an installed multilingual model. An explicit request such as
 ## Settings
 
 The gear icon opens Settings: reply language (Auto / Tagalog / English), translator on/off,
-**max reply tokens** (256–4096), and **context size** (2048–8192 tokens).
+voice language, a **max output tokens** slider (64–8192), and **context size**
+(2048–16384 tokens). The app version is shown at the bottom.
+
+## Voice mode
+
+The microphone button opens a hands-free conversation: the phone listens, the local model
+answers, and the answer is read aloud, then it listens again. Tap the circle to interrupt.
+Speech recognition and the voice come from the phone's own speech services
+([expo-speech-recognition](https://github.com/jamsch/expo-speech-recognition),
+[expo-speech](https://docs.expo.dev/versions/latest/sdk/speech/)); whether they work offline
+depends on the speech packs installed on the phone. The AI model itself stays local.
+
+## Using your own models
+
+**Models → Import from files** lets you pick any `.gguf` file already on the phone. The app
+copies it in, and you choose which specialist it is best at; matching questions are then
+routed to it ahead of the built-in model for that specialist.
 
 ## Specialists and models
 

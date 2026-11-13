@@ -1,6 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { MODELS, modelUrl, type ModelInfo } from '../models/catalog';
+import * as DocumentPicker from 'expo-document-picker';
+
+import { allModels, modelUrl, type ModelInfo } from '../models/catalog';
 
 const DIR = `${FileSystem.documentDirectory}models/`;
 
@@ -18,7 +20,7 @@ async function ensureDir() {
 export async function listInstalled(): Promise<string[]> {
   await ensureDir();
   const found: string[] = [];
-  for (const m of MODELS) {
+  for (const m of allModels()) {
     const info = await FileSystem.getInfoAsync(modelPath(m));
     if (info.exists) found.push(m.id);
   }
@@ -77,4 +79,53 @@ export async function cancelDownload(m: ModelInfo): Promise<void> {
 
 export async function deleteModel(m: ModelInfo): Promise<void> {
   await FileSystem.deleteAsync(modelPath(m), { idempotent: true });
+}
+
+export interface ImportedFile {
+  name: string;
+  file: string;
+  sizeBytes: number;
+}
+
+const GGUF_MAGIC_BASE64 = 'R0dVRg=='; // the bytes "GGUF"
+
+/**
+ * Lets the user pick a .gguf model from their own storage and copies it into the app.
+ * Resolves null when the picker is cancelled. The app keeps its own copy, so the
+ * original file can be moved or deleted afterwards.
+ */
+export async function importModel(id: string): Promise<ImportedFile | null> {
+  const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+  if (picked.canceled) return null;
+  const asset = picked.assets[0];
+  const discard = () => FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
+
+  if (!/\.gguf$/i.test(asset.name)) {
+    await discard();
+    throw new Error(`"${asset.name}" is not a .gguf model file.`);
+  }
+  try {
+    const head = await FileSystem.readAsStringAsync(asset.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+      position: 0,
+      length: 4,
+    });
+    if (head !== GGUF_MAGIC_BASE64) {
+      await discard();
+      throw new Error(`"${asset.name}" is not a valid GGUF file.`);
+    }
+  } catch (e) {
+    if (e instanceof Error && /GGUF/.test(e.message)) throw e;
+    // Could not read the header; let llama.cpp judge the file when it loads.
+  }
+
+  await ensureDir();
+  const file = `custom-${id}.gguf`;
+  await FileSystem.moveAsync({ from: asset.uri, to: `${DIR}${file}` });
+  const info = await FileSystem.getInfoAsync(`${DIR}${file}`);
+  return {
+    name: asset.name.replace(/\.gguf$/i, ''),
+    file,
+    sizeBytes: asset.size ?? (info.exists ? info.size : 0),
+  };
 }
