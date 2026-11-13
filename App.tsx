@@ -56,6 +56,7 @@ import {
   type Settings,
 } from './src/storage/settings';
 import { colors } from './src/theme';
+import * as google from './src/translate/google';
 import { HistorySheet } from './src/ui/HistorySheet';
 import { MessageView } from './src/ui/MessageView';
 import { ModelsSheet } from './src/ui/ModelsSheet';
@@ -78,7 +79,9 @@ function buildTurns(systemPrompt: string, history: Message[], charBudget: number
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];
     if (m.error) continue;
-    const content = m.role === 'assistant' ? splitThinking(m.content).answer : m.content;
+    // Prefer the English side of translated messages so the model sees one consistent language.
+    const content =
+      m.role === 'assistant' ? (m.original ?? splitThinking(m.content).answer) : (m.modelText ?? m.content);
     if (!content) continue;
     // Always keep the newest message; drop older ones once the budget is spent.
     if (turns.length > 0 && used + content.length > charBudget) break;
@@ -121,6 +124,8 @@ function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [googlePack, setGooglePack] = useState<google.PackState>('unavailable');
+  const [packBusy, setPackBusy] = useState(false);
 
   const listRef = useRef<FlatList<Message>>(null);
   const followRef = useRef(true);
@@ -137,6 +142,7 @@ function Chat() {
   useEffect(() => {
     loadConversations().then(setConversations);
     loadSettings().then(setSettings);
+    google.packState().then(setGooglePack);
     refreshStorage();
     return () => {
       engine.unload().catch(() => {});
@@ -215,7 +221,29 @@ function Chat() {
       followRef.current = true;
 
       let final: Message = reply;
+      let sent = base;
+      // Translator bridge: Google ML Kit sits between the user and the model. A Tagalog question is
+      // turned into English for the model, and the English answer is turned back into Tagalog.
+      let bridge = false;
       try {
+        if (settings.autoTranslate && google.available && target === 'tl') {
+          try {
+            if ((await google.packState()) !== 'ready') {
+              setStatus('Downloading Tagalog language pack (one time)…');
+              await google.ensurePacks();
+              setGooglePack('ready');
+            }
+            setStatus('Translating your question…');
+            const english = detectLanguage(text) === 'en' ? text : await google.translate(text, 'tl', 'en');
+            sent = [...history, { ...userMessage, modelText: english }];
+            bridge = true;
+          } catch {
+            // No language pack and no internet, or ML Kit failed: fall back to asking the model directly.
+            bridge = false;
+          }
+        }
+        const modelLanguage: Lang = bridge ? 'en' : target;
+
         await load(pick.model);
         setStatus('Answering…');
 
@@ -229,10 +257,10 @@ function Chat() {
         };
         const result = await engine.generate(
           buildTurns(
-            `${specialist.systemPrompt} ${languageInstruction(target)}`,
-            base,
+            `${specialist.systemPrompt} ${languageInstruction(modelLanguage)}`,
+            sent,
             historyCharBudget(settings),
-            languageReminder(target),
+            languageReminder(modelLanguage),
           ),
           { temperature: specialist.temperature, maxTokens },
           paint,
@@ -240,6 +268,15 @@ function Chat() {
         final = { ...reply, content: result.text.trim(), tokensPerSecond: result.tokensPerSecond };
         if (!splitThinking(final.content).answer) {
           final = { ...final, error: true, content: 'The model returned no answer. Please try again.' };
+        } else if (bridge) {
+          const answer = splitThinking(final.content).answer;
+          try {
+            setStatus('Translating to Tagalog…');
+            const translated = await google.translate(answer, 'en', 'tl');
+            final = { ...final, content: translated, original: answer, translatedTo: 'tl', translatorId: 'google' };
+          } catch {
+            // Keep the English answer rather than lose it.
+          }
         } else if (settings.autoTranslate) {
           // Translator: some specialists drift into the wrong language. Fix the answer before showing it.
           const answer = splitThinking(final.content).answer;
@@ -274,7 +311,7 @@ function Chat() {
           content: `${pick.model.name} could not answer: ${errorText(e)}\n\nIf the phone is low on RAM, try a smaller model.`,
         };
       } finally {
-        const done = [...base, final];
+        const done = [...sent, final];
         setMessages(done);
         setStatus('');
         setGenerating(false);
@@ -287,6 +324,18 @@ function Chat() {
   const changeSettings = useCallback((next: Settings) => {
     setSettings(next);
     saveSettings(next).catch(() => {});
+  }, []);
+
+  const downloadPack = useCallback(async () => {
+    setPackBusy(true);
+    try {
+      await google.ensurePacks();
+    } catch (e) {
+      Alert.alert('Download failed', `Tagalog language pack: ${errorText(e)}`);
+    } finally {
+      setGooglePack(await google.packState());
+      setPackBusy(false);
+    }
   }, []);
 
   const translatorAvailable = useMemo(() => pickTranslator('', installed) !== null, [installed]);
@@ -540,6 +589,9 @@ function Chat() {
         settings={settings}
         onChange={changeSettings}
         translatorAvailable={translatorAvailable}
+        googlePack={googlePack}
+        packBusy={packBusy}
+        onDownloadPack={downloadPack}
       />
       <HistorySheet
         visible={showHistory}

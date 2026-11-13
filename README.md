@@ -20,12 +20,20 @@ You can override Auto with the chips above the message box.
 
 ## Reply language and translator
 
-The app detects whether you wrote in Tagalog/Taglish or English (`src/router/language.ts`)
-and tells whichever model answers to reply in that language. If the answer still comes out
-in the wrong language, the **translator** passes it through an installed multilingual model
-(Gemma 2 2B, Llama 3.2 3B, or Qwen2.5 1.5B) before showing it; code blocks are left as they
-are, and "Show original" reveals the untranslated answer. An explicit request such as
-"i-translate sa English" or "explain in Tagalog" always wins.
+The app detects whether you wrote in Tagalog/Taglish or English (`src/router/language.ts`).
+For Tagalog, **Google ML Kit on-device translation** (the offline language packs behind
+Google Translate) sits between you and the AI models:
+
+1. your Tagalog question is translated to English,
+2. the specialist model answers in English, where small models are strongest,
+3. the answer is translated back to Tagalog. Code blocks and inline code are left untouched,
+   and "Show original" reveals the English answer.
+
+The Tagalog pack (about 30 MB) is downloaded once, on first use or from Settings; after that
+translation is offline. The native wrapper lives in `modules/hezam-translate` (Android only).
+Where ML Kit is unavailable, the app falls back to asking the model to reply in Tagalog and
+translating with an installed multilingual model. An explicit request such as
+"i-translate sa English" always wins.
 
 ## Settings
 

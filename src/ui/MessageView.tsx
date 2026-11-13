@@ -65,7 +65,7 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
         Auto-route: {why}
         {message.fallback ? ' · stand-in model (specialist not installed)' : ''}
         {message.translatedTo
-          ? ` · translated to ${message.translatedTo === 'tl' ? 'Tagalog' : 'English'}${translator ? ` by ${translator.name}` : ''}`
+          ? ` · translated to ${message.translatedTo === 'tl' ? 'Tagalog' : 'English'}${message.translatorId === 'google' ? ' by Google Translate (on-device)' : translator ? ` by ${translator.name}` : ''}`
           : ''}
       </Text>
 

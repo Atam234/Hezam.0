@@ -1,0 +1,7 @@
+{
+  "name": "hezam-translate",
+  "version": "1.0.0",
+  "description": "On-device Google ML Kit translation (Tagalog <-> English) for Hezam.0",
+  "main": "index.ts",
+  "private": true
+}

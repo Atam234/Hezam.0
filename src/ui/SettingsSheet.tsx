@@ -1,6 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import appConfig from '../../app.json';
 import type { ReplyLanguageSetting } from '../router/language';
 import {
   CONTEXT_OPTIONS,
@@ -18,6 +19,10 @@ interface Props {
   onChange: (next: Settings) => void;
   /** False when no installed model can translate. */
   translatorAvailable: boolean;
+  /** State of the Google ML Kit Tagalog/English language packs. */
+  googlePack: 'unavailable' | 'missing' | 'ready';
+  packBusy: boolean;
+  onDownloadPack: () => void;
 }
 
 const LANGUAGES: { value: ReplyLanguageSetting; label: string }[] = [
@@ -51,7 +56,8 @@ function Segmented<T extends string | number>(props: {
   );
 }
 
-export function SettingsSheet({ visible, onClose, settings, onChange, translatorAvailable }: Props) {
+export function SettingsSheet(props: Props) {
+  const { visible, onClose, settings, onChange, translatorAvailable, googlePack, packBusy } = props;
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
   const capped = effectiveMaxTokens(settings) < settings.maxTokens;
   return (
@@ -78,7 +84,8 @@ export function SettingsSheet({ visible, onClose, settings, onChange, translator
               <View style={styles.switchText}>
                 <Text style={styles.label}>Translator</Text>
                 <Text style={styles.help}>
-                  If a model still answers in the wrong language, translate its answer before showing it.
+                  Google Translate (on-device) sits between you and the AI models: your Tagalog question is
+                  translated to English for the model, and its answer is translated back to Tagalog.
                 </Text>
               </View>
               <Switch
@@ -88,9 +95,28 @@ export function SettingsSheet({ visible, onClose, settings, onChange, translator
                 thumbColor="#FFFFFF"
               />
             </View>
-            {settings.autoTranslate && !translatorAvailable && (
+            {settings.autoTranslate && googlePack === 'ready' && (
+              <Text style={styles.ok}>✓ Tagalog language pack installed. Translation works offline.</Text>
+            )}
+            {settings.autoTranslate && googlePack === 'missing' && (
+              <View style={styles.packRow}>
+                <Text style={[styles.warn, styles.packText]}>
+                  Tagalog language pack not downloaded yet (about 30 MB, needs internet once).
+                </Text>
+                <Pressable
+                  style={[styles.packButton, packBusy && styles.packButtonBusy]}
+                  disabled={packBusy}
+                  onPress={props.onDownloadPack}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.packButtonText}>{packBusy ? 'Downloading…' : 'Download'}</Text>
+                </Pressable>
+              </View>
+            )}
+            {settings.autoTranslate && googlePack === 'unavailable' && !translatorAvailable && (
               <Text style={styles.warn}>
-                No translator model installed yet. Download Gemma 2 2B, Llama 3.2 3B, or Qwen2.5 1.5B in Models.
+                Google translation is not available on this device and no translator model is installed.
+                Download Gemma 2 2B, Llama 3.2 3B, or Qwen2.5 1.5B in Models.
               </Text>
             )}
           </View>
@@ -129,6 +155,7 @@ export function SettingsSheet({ visible, onClose, settings, onChange, translator
           <Pressable style={styles.reset} onPress={() => onChange(DEFAULT_SETTINGS)} accessibilityRole="button">
             <Text style={styles.resetText}>Reset to defaults</Text>
           </Pressable>
+          <Text style={styles.version}>Hezam.0 v{appConfig.expo.version}</Text>
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -159,6 +186,12 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 16, fontWeight: '600' },
   help: { color: colors.textDim, fontSize: 13, lineHeight: 19 },
   warn: { color: '#FBBF24', fontSize: 13, lineHeight: 19 },
+  ok: { color: '#34D399', fontSize: 13, lineHeight: 19 },
+  packRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  packText: { flex: 1 },
+  packButton: { backgroundColor: colors.accent, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  packButtonBusy: { opacity: 0.5 },
+  packButtonText: { color: colors.onAccent, fontWeight: '700', fontSize: 13 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 6 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   switchText: { flex: 1, gap: 6 },
@@ -174,5 +207,6 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.textDim, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
   segmentTextActive: { color: colors.onAccent },
   reset: { alignItems: 'center', paddingVertical: 14 },
+  version: { color: colors.textFaint, fontSize: 12, textAlign: 'center' },
   resetText: { color: colors.textDim, fontSize: 14, fontWeight: '600' },
 });

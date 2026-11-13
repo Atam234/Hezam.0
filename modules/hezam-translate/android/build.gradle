@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.hezam.translate'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.hezamtranslate"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // Google ML Kit on-device translation: the same offline language packs Google Translate uses.
+  implementation 'com.google.mlkit:translate:17.0.3'
+}

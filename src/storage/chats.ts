@@ -6,6 +6,8 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  /** User messages: the English version given to the model when the translator bridge is on. */
+  modelText?: string;
   /** Assistant messages: who answered and why. */
   specialist?: SpecialistId;
   modelId?: string;
