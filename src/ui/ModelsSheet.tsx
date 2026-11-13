@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatSize, SPECIALIST_ORDER, SPECIALISTS, type ModelInfo } from '../models/catalog';
 import type { SpecialistId } from '../router/router';
 import { colors } from '../theme';
+import { PillButton } from './Buttons';
 
 interface Props {
   visible: boolean;
@@ -49,14 +50,12 @@ export function ModelsSheet(props: Props) {
               best at. Hezam.0 will route matching questions to it.
             </Text>
             <View style={styles.actions}>
-              <Pressable
-                style={[styles.button, props.importing && styles.buttonDisabled]}
+              <PillButton
+                icon="folder-open"
+                label={props.importing ? 'Importing…' : 'Import from files'}
                 disabled={props.importing}
                 onPress={props.onImport}
-                accessibilityRole="button"
-              >
-                <Text style={styles.buttonText}>{props.importing ? 'Importing…' : 'Import from files'}</Text>
-              </Pressable>
+              />
             </View>
             {props.importing && (
               <Text style={styles.meta}>Copying the file into the app. Large models can take a minute.</Text>
@@ -134,14 +133,12 @@ export function ModelsSheet(props: Props) {
                   </View>
                 ) : (
                   <View style={styles.actions}>
-                    <Pressable
-                      style={[styles.button, tooBig && styles.buttonDisabled]}
+                    <PillButton
+                      icon="cloud-download"
+                      label="Download"
                       disabled={tooBig}
                       onPress={() => props.onDownload(m)}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.buttonText}>Download</Text>
-                    </Pressable>
+                    />
                     {tooBig && <Text style={styles.warn}>Not enough storage</Text>}
                   </View>
                 )}

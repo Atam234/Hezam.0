@@ -13,6 +13,9 @@ import {
   type Settings,
 } from '../storage/settings';
 import { colors } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { ACCENT_GRADIENT, PillButton } from './Buttons';
 import { Slider } from './Slider';
 
 interface Props {
@@ -51,11 +54,20 @@ function Segmented<T extends string | number>(props: {
         return (
           <Pressable
             key={String(o.value)}
-            style={[styles.segment, active && styles.segmentActive]}
+            style={styles.segment}
             onPress={() => props.onSelect(o.value)}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
+            {active && (
+              <LinearGradient
+                colors={ACCENT_GRADIENT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.segmentFill}
+                pointerEvents="none"
+              />
+            )}
             <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{o.label}</Text>
           </Pressable>
         );
@@ -111,14 +123,13 @@ export function SettingsSheet(props: Props) {
                 <Text style={[styles.warn, styles.packText]}>
                   Tagalog language pack not downloaded yet (about 30 MB, needs internet once).
                 </Text>
-                <Pressable
-                  style={[styles.packButton, packBusy && styles.packButtonBusy]}
+                <PillButton
+                  small
+                  icon="cloud-download"
+                  label={packBusy ? 'Downloading…' : 'Download'}
                   disabled={packBusy}
                   onPress={props.onDownloadPack}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.packButtonText}>{packBusy ? 'Downloading…' : 'Download'}</Text>
-                </Pressable>
+                />
               </View>
             )}
             {settings.autoTranslate && googlePack === 'unavailable' && !translatorAvailable && (
@@ -238,10 +249,11 @@ const styles = StyleSheet.create({
     padding: 3,
     gap: 3,
   },
-  segment: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9 },
+  segment: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9, overflow: 'hidden' },
+  segmentFill: { ...StyleSheet.absoluteFill, borderRadius: 9 },
   segmentActive: { backgroundColor: colors.accent },
   segmentText: { color: colors.textDim, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  segmentTextActive: { color: colors.onAccent },
+  segmentTextActive: { color: '#FFFFFF' },
   reset: { alignItems: 'center', paddingVertical: 14 },
   version: { color: colors.textFaint, fontSize: 12, textAlign: 'center' },
   resetText: { color: colors.textDim, fontSize: 14, fontWeight: '600' },

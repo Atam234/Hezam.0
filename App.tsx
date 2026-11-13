@@ -59,6 +59,7 @@ import {
 } from './src/storage/settings';
 import { colors } from './src/theme';
 import * as google from './src/translate/google';
+import { AccentCard, IconButton, PillButton } from './src/ui/Buttons';
 import { HistorySheet } from './src/ui/HistorySheet';
 import { MessageView } from './src/ui/MessageView';
 import { ModelsSheet } from './src/ui/ModelsSheet';
@@ -499,15 +500,7 @@ function Chat() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => setShowHistory(true)}
-          hitSlop={10}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Chat history"
-        >
-          <Text style={styles.icon}>☰</Text>
-        </Pressable>
+        <IconButton icon="menu" onPress={() => setShowHistory(true)} accessibilityLabel="Chat history" />
         <View style={styles.headerCenter}>
           <Text style={styles.brand}>
             Hezam<Text style={styles.brandDim}>.0</Text>
@@ -516,34 +509,16 @@ function Chat() {
             {subtitle}
           </Text>
         </View>
-        <Pressable
+        <PillButton
+          variant="glass"
+          small
+          icon="cube-outline"
+          label={`${installed.size}/${models.length}`}
           onPress={() => setShowModels(true)}
-          style={styles.modelsPill}
-          accessibilityRole="button"
           accessibilityLabel="Manage AI models"
-        >
-          <Text style={styles.modelsPillText}>
-            Models {installed.size}/{models.length}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setShowSettings(true)}
-          hitSlop={6}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-        >
-          <Text style={styles.icon}>⚙</Text>
-        </Pressable>
-        <Pressable
-          onPress={newChat}
-          hitSlop={10}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="New chat"
-        >
-          <Text style={styles.icon}>＋</Text>
-        </Pressable>
+        />
+        <IconButton icon="settings-sharp" onPress={() => setShowSettings(true)} accessibilityLabel="Settings" />
+        <IconButton icon="add" iconSize={24} onPress={newChat} accessibilityLabel="New chat" />
       </View>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
@@ -556,10 +531,10 @@ function Chat() {
               One assistant, many experts.{'\n'}Automatically picks the right local AI model for every question.
             </Text>
             {installed.size === 0 ? (
-              <Pressable style={styles.cta} onPress={() => setShowModels(true)} accessibilityRole="button">
+              <AccentCard onPress={() => setShowModels(true)}>
                 <Text style={styles.ctaTitle}>Download your first model</Text>
                 <Text style={styles.ctaText}>You need at least one model to chat offline.</Text>
-              </Pressable>
+              </AccentCard>
             ) : (
               <View style={styles.suggestions}>
                 {SUGGESTIONS.map((s) => {
@@ -628,34 +603,25 @@ function Chat() {
               accessibilityLabel="Message"
             />
             {!generating && (
-              <Pressable
-                style={styles.mic}
-                onPress={() => setShowVoice(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Voice mode"
-              >
-                <Text style={styles.micGlyph}>🎙</Text>
-              </Pressable>
+              <IconButton icon="mic" onPress={() => setShowVoice(true)} accessibilityLabel="Voice mode" />
             )}
             {generating ? (
-              <Pressable
-                style={styles.send}
+              <IconButton
+                icon="stop"
+                variant="accent"
+                iconSize={16}
                 onPress={() => engine.stop().catch(() => {})}
-                accessibilityRole="button"
                 accessibilityLabel="Stop"
-              >
-                <View style={styles.stopSquare} />
-              </Pressable>
+              />
             ) : (
-              <Pressable
-                style={[styles.send, !input.trim() && styles.sendDisabled]}
+              <IconButton
+                icon="arrow-up"
+                variant="accent"
+                iconSize={21}
                 disabled={!input.trim()}
                 onPress={() => send(input)}
-                accessibilityRole="button"
                 accessibilityLabel="Send"
-              >
-                <Text style={styles.sendArrow}>↑</Text>
-              </Pressable>
+              />
             )}
           </View>
         </View>
@@ -721,7 +687,7 @@ function ModeChip(props: { label: string; active: boolean; color: string; onPres
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8, gap: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
   iconButton: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
   icon: { color: colors.text, fontSize: 20 },
   headerCenter: { flex: 1, paddingLeft: 4 },
@@ -741,8 +707,8 @@ const styles = StyleSheet.create({
   heroLogo: { color: colors.text, fontSize: 44, fontWeight: '800', textAlign: 'center', letterSpacing: -1 },
   heroTag: { color: colors.textDim, fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 16 },
   cta: { backgroundColor: colors.accent, borderRadius: 18, padding: 18, gap: 4 },
-  ctaTitle: { color: colors.onAccent, fontSize: 17, fontWeight: '700' },
-  ctaText: { color: '#3F3F46', fontSize: 14, lineHeight: 20 },
+  ctaTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+  ctaText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
   suggestions: { gap: 10 },
   suggestion: {
     backgroundColor: colors.surface,

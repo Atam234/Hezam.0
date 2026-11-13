@@ -5,7 +5,10 @@ import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Lang } from '../router/language';
+import { LinearGradient } from 'expo-linear-gradient';
+
 import { colors } from '../theme';
+import { PillButton } from './Buttons';
 import { completeSentences, speakable, speechLocale } from '../voice/speech';
 
 export interface VoiceAnswer {
@@ -37,12 +40,12 @@ const LABEL: Record<Phase, string> = {
   error: 'Tap to try again',
 };
 
-const ORB_COLOR: Record<Phase, string> = {
-  idle: '#3F3F46',
-  listening: '#FFFFFF',
-  thinking: '#FBBF24',
-  speaking: '#34D399',
-  error: '#F87171',
+const ORB_COLOR: Record<Phase, readonly [string, string, string]> = {
+  idle: ['#4B4D5A', '#2A2C36', '#131419'],
+  listening: ['#7DF9FF', '#6D6BFF', '#C055F5'],
+  thinking: ['#FDE68A', '#F59E0B', '#B45309'],
+  speaking: ['#6EE7B7', '#10B981', '#047857'],
+  error: ['#FCA5A5', '#EF4444', '#991B1B'],
 };
 
 /** Hands-free conversation: listen, answer with the local model, read the answer aloud, repeat. */
@@ -264,14 +267,22 @@ export function VoiceSheet({ visible, onClose, voiceLanguage, onAsk }: Props) {
 
         <View style={styles.center}>
           <Pressable onPress={onOrb} accessibilityRole="button" accessibilityLabel={LABEL[phase]}>
-            <Animated.View style={[styles.orb, { backgroundColor: ORB_COLOR[phase], transform: [{ scale }] }]} />
+            <Animated.View style={[styles.orbGlow, { shadowColor: ORB_COLOR[phase][1], transform: [{ scale }] }]}>
+              <LinearGradient colors={ORB_COLOR[phase]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.orb}>
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']}
+                  style={styles.orbGloss}
+                  pointerEvents="none"
+                />
+              </LinearGradient>
+            </Animated.View>
           </Pressable>
           <Text style={styles.phase}>{LABEL[phase]}</Text>
         </View>
 
-        <Pressable style={styles.end} onPress={onClose} accessibilityRole="button">
-          <Text style={styles.endText}>End</Text>
-        </Pressable>
+        <View style={styles.end}>
+          <PillButton variant="glass" icon="close" label="End" onPress={onClose} />
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -288,15 +299,22 @@ const styles = StyleSheet.create({
   reply: { color: colors.text, fontSize: 20, lineHeight: 29 },
   error: { color: colors.danger, fontSize: 15, lineHeight: 22, textAlign: 'center' },
   center: { alignItems: 'center', gap: 18, paddingVertical: 24 },
-  orb: { width: 132, height: 132, borderRadius: 66 },
-  phase: { color: colors.textDim, fontSize: 15 },
-  end: {
-    alignSelf: 'center',
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 36,
-    paddingVertical: 12,
+  orbGlow: {
+    borderRadius: 70,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 28,
+    elevation: 18,
   },
-  endText: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  orb: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  orbGloss: { position: 'absolute', top: 8, left: 28, right: 28, height: 52, borderRadius: 50 },
+  phase: { color: colors.textDim, fontSize: 15 },
+  end: { alignSelf: 'center' },
 });
