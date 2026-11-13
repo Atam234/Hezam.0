@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import * as DocumentPicker from 'expo-document-picker';
 
+import { HezamFiles } from '../../modules/hezam-translate';
 import { allModels, modelUrl, type ModelInfo } from '../models/catalog';
 
 const DIR = `${FileSystem.documentDirectory}models/`;
@@ -87,45 +88,40 @@ export interface ImportedFile {
   sizeBytes: number;
 }
 
-const GGUF_MAGIC_BASE64 = 'R0dVRg=='; // the bytes "GGUF"
-
 /**
  * Lets the user pick a .gguf model from their own storage and copies it into the app.
  * Resolves null when the picker is cancelled. The app keeps its own copy, so the
  * original file can be moved or deleted afterwards.
  */
 export async function importModel(id: string): Promise<ImportedFile | null> {
-  const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+  // On Android the picker must NOT copy the file itself: it does that on the UI thread,
+  // which freezes and kills the app for a multi-gigabyte model. Our native module
+  // streams the file on a background thread instead.
+  const native = HezamFiles;
+  const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: !native });
   if (picked.canceled) return null;
   const asset = picked.assets[0];
-  const discard = () => FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
 
   if (!/\.gguf$/i.test(asset.name)) {
-    await discard();
+    if (!native) await FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
     throw new Error(`"${asset.name}" is not a .gguf model file.`);
   }
-  try {
-    const head = await FileSystem.readAsStringAsync(asset.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-      position: 0,
-      length: 4,
-    });
-    if (head !== GGUF_MAGIC_BASE64) {
-      await discard();
-      throw new Error(`"${asset.name}" is not a valid GGUF file.`);
+  if (asset.size) {
+    const free = await FileSystem.getFreeDiskStorageAsync().catch(() => 0);
+    if (free > 0 && asset.size > free) {
+      if (!native) await FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
+      throw new Error('Not enough free storage to copy this model into the app.');
     }
-  } catch (e) {
-    if (e instanceof Error && /GGUF/.test(e.message)) throw e;
-    // Could not read the header; let llama.cpp judge the file when it loads.
   }
 
   await ensureDir();
   const file = `custom-${id}.gguf`;
-  await FileSystem.moveAsync({ from: asset.uri, to: `${DIR}${file}` });
-  const info = await FileSystem.getInfoAsync(`${DIR}${file}`);
-  return {
-    name: asset.name.replace(/\.gguf$/i, ''),
-    file,
-    sizeBytes: asset.size ?? (info.exists ? info.size : 0),
-  };
+  const target = `${DIR}${file}`;
+  let sizeBytes = asset.size ?? 0;
+  if (native) {
+    sizeBytes = await native.importGguf(asset.uri, target);
+  } else {
+    await FileSystem.moveAsync({ from: asset.uri, to: target });
+  }
+  return { name: asset.name.replace(/\.gguf$/i, ''), file, sizeBytes };
 }

@@ -1,6 +1,11 @@
 {
-  "platforms": ["android"],
+  "platforms": [
+    "android"
+  ],
   "android": {
-    "modules": ["expo.modules.hezamtranslate.HezamTranslateModule"]
+    "modules": [
+      "expo.modules.hezamtranslate.HezamTranslateModule",
+      "expo.modules.hezamtranslate.HezamFilesModule"
+    ]
   }
 }
