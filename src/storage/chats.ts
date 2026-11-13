@@ -13,6 +13,11 @@ export interface Message {
   fallback?: boolean;
   manual?: boolean;
   tokensPerSecond?: number;
+  /** Set when the answer went through the translator. */
+  translatedTo?: 'tl' | 'en';
+  translatorId?: string;
+  /** The untranslated answer, kept so the user can compare. */
+  original?: string;
   error?: boolean;
 }
 

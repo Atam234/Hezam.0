@@ -16,6 +16,7 @@ interface Props {
 
 export const MessageView = memo(function MessageView({ message, status }: Props) {
   const [copied, setCopied] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   if (message.role === 'user') {
     return (
@@ -31,7 +32,10 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
 
   const specialist = SPECIALISTS[message.specialist ?? 'general'];
   const model = message.modelId ? getModel(message.modelId) : undefined;
-  const { answer, thinking } = splitThinking(message.content);
+  const split = splitThinking(message.content);
+  const thinking = split.thinking;
+  const answer = showOriginal && message.original ? message.original : split.answer;
+  const translator = message.translatorId ? getModel(message.translatorId) : undefined;
   const why = message.manual
     ? 'you chose this'
     : message.matched?.length
@@ -60,6 +64,9 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
       <Text style={styles.why}>
         Auto-route: {why}
         {message.fallback ? ' · stand-in model (specialist not installed)' : ''}
+        {message.translatedTo
+          ? ` · translated to ${message.translatedTo === 'tl' ? 'Tagalog' : 'English'}${translator ? ` by ${translator.name}` : ''}`
+          : ''}
       </Text>
 
       {message.error ? (
@@ -75,6 +82,11 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
           <Pressable onPress={copy} hitSlop={10} accessibilityRole="button" accessibilityLabel="Copy answer">
             <Text style={styles.footerText}>{copied ? 'Copied ✓' : 'Copy'}</Text>
           </Pressable>
+          {message.original ? (
+            <Pressable onPress={() => setShowOriginal((v) => !v)} hitSlop={10} accessibilityRole="button">
+              <Text style={styles.footerText}>{showOriginal ? 'Show translation' : 'Show original'}</Text>
+            </Pressable>
+          ) : null}
           {message.tokensPerSecond ? (
             <Text style={styles.footerText}>{message.tokensPerSecond.toFixed(1)} tok/s · offline</Text>
           ) : null}

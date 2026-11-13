@@ -22,25 +22,27 @@ const STOP_WORDS = [
   '<｜end▁of▁sentence｜>',
 ];
 
-export const CONTEXT_TOKENS = 4096;
-
 let context: LlamaContext | null = null;
 let loadedId: string | null = null;
+let loadedContext = 0;
 
 export const isDemo = false;
 export const loadedModelId = () => loadedId;
+export const isLoaded = (modelId: string, contextTokens: number) =>
+  loadedId === modelId && loadedContext === contextTokens;
 
 export async function ensureLoaded(
   modelId: string,
   path: string,
+  contextTokens: number,
   onProgress?: (fraction: number) => void,
 ): Promise<void> {
-  if (context && loadedId === modelId) return;
+  if (context && loadedId === modelId && loadedContext === contextTokens) return;
   await unload();
   context = await initLlama(
     {
       model: path,
-      n_ctx: CONTEXT_TOKENS,
+      n_ctx: contextTokens,
       // Metal on iOS. Android stays on CPU, which works on every device.
       n_gpu_layers: Platform.OS === 'ios' ? 99 : 0,
       use_mlock: false,
@@ -48,6 +50,7 @@ export async function ensureLoaded(
     (p) => onProgress?.(p / 100),
   );
   loadedId = modelId;
+  loadedContext = contextTokens;
 }
 
 export async function generate(
@@ -84,5 +87,6 @@ export async function unload(): Promise<void> {
   const old = context;
   context = null;
   loadedId = null;
+  loadedContext = 0;
   await old?.release();
 }

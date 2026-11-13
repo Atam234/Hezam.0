@@ -38,6 +38,12 @@ test('short follow-up stays with the previous specialist', () => {
   assert.equal(d.sticky, true);
 });
 
+test('a short fresh question does not stick', () => {
+  assert.equal(classify('What is the capital of Japan?', 'code').specialist, 'general');
+  assert.equal(classify('Sino si Jose Rizal?', 'writing').specialist, 'general');
+  assert.equal(classify('bakit ganyan?', 'code').specialist, 'code');
+});
+
 test('a clear new topic overrides the previous specialist', () => {
   assert.equal(classify('Gawan mo ako ng tula', 'code').specialist, 'writing');
 });

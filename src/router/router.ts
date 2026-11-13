@@ -126,6 +126,8 @@ const RULES: Rule[] = [
 const ORDER: SpecialistId[] = ['code', 'reasoning', 'writing', 'creative', 'general'];
 const MIN_SCORE = 2;
 const STICKY_MAX_LENGTH = 80;
+/** A fresh factual question ("What is…", "Sino si…") starts a new topic rather than continuing one. */
+const NEW_TOPIC = /^\s*(what|who|where|when|which|ano|anong|sino|saan|kailan|alin)\b/i;
 
 export function classify(text: string, previous?: SpecialistId): RouteDecision {
   const scores: Record<SpecialistId, number> = {
@@ -164,7 +166,8 @@ export function classify(text: string, previous?: SpecialistId): RouteDecision {
       previous !== undefined &&
       previous !== 'general' &&
       text.trim().length > 0 &&
-      text.trim().length <= STICKY_MAX_LENGTH;
+      text.trim().length <= STICKY_MAX_LENGTH &&
+      !NEW_TOPIC.test(text);
     return {
       specialist: isFollowUp ? previous : 'general',
       scores,

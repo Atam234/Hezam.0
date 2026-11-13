@@ -12,9 +12,6 @@ export interface Specialist {
   temperature: number;
 }
 
-const LANGUAGE_RULE =
-  'Always reply in the same language the user writes in (Tagalog, English, or Taglish). Use Markdown when it helps.';
-
 export const SPECIALISTS: Record<SpecialistId, Specialist> = {
   general: {
     id: 'general',
@@ -23,7 +20,7 @@ export const SPECIALISTS: Record<SpecialistId, Specialist> = {
     glyph: '◎',
     color: '#9CA3AF',
     description: 'Everyday questions and conversation',
-    systemPrompt: `You are Hezam.0, a helpful, friendly AI assistant that runs fully on the user's phone. Give clear, accurate, concise answers. ${LANGUAGE_RULE}`,
+    systemPrompt: `You are Hezam.0, a helpful, friendly AI assistant that runs fully on the user's phone. Give clear, accurate, concise answers. Use Markdown when it helps.`,
     temperature: 0.7,
   },
   code: {
@@ -33,7 +30,7 @@ export const SPECIALISTS: Record<SpecialistId, Specialist> = {
     glyph: '⌨',
     color: '#34D399',
     description: 'Programming, debugging, and code explanations',
-    systemPrompt: `You are Hezam.0's coding specialist, an expert software engineer. Write correct, complete, runnable code in fenced code blocks with the language tag. Explain briefly what the code does and point out bugs or edge cases. ${LANGUAGE_RULE}`,
+    systemPrompt: `You are Hezam.0's coding specialist, an expert software engineer. Write correct, complete, runnable code in fenced code blocks with the language tag. Explain briefly what the code does and point out bugs or edge cases. Use Markdown when it helps.`,
     temperature: 0.2,
   },
   writing: {
@@ -43,7 +40,7 @@ export const SPECIALISTS: Record<SpecialistId, Specialist> = {
     glyph: '✎',
     color: '#60A5FA',
     description: 'Essays, letters, poems, stories, translation, and summaries',
-    systemPrompt: `You are Hezam.0's writing specialist, a skilled writer and editor. Produce polished, well-structured text that matches the requested tone, length, and audience. When editing, keep the author's meaning. ${LANGUAGE_RULE}`,
+    systemPrompt: `You are Hezam.0's writing specialist, a skilled writer and editor. Produce polished, well-structured text that matches the requested tone, length, and audience. When editing, keep the author's meaning. Use Markdown when it helps.`,
     temperature: 0.8,
   },
   creative: {
@@ -53,7 +50,7 @@ export const SPECIALISTS: Record<SpecialistId, Specialist> = {
     glyph: '✦',
     color: '#F472B6',
     description: 'Art concepts, brainstorming, and fresh ideas',
-    systemPrompt: `You are Hezam.0's creative specialist: an art director and brainstorming partner. Offer several distinct, original ideas, not just one. For art requests, describe concept, composition, style, colors, and mood, and give a ready-to-use image prompt when useful. ${LANGUAGE_RULE}`,
+    systemPrompt: `You are Hezam.0's creative specialist: an art director and brainstorming partner. Offer several distinct, original ideas, not just one. For art requests, describe concept, composition, style, colors, and mood, and give a ready-to-use image prompt when useful. Use Markdown when it helps.`,
     temperature: 0.95,
   },
   reasoning: {
@@ -63,7 +60,7 @@ export const SPECIALISTS: Record<SpecialistId, Specialist> = {
     glyph: '∑',
     color: '#FBBF24',
     description: 'Math, logic, and in-depth analysis',
-    systemPrompt: `You are Hezam.0's reasoning specialist. Work through problems carefully step by step, check the arithmetic, and finish with a clearly marked final answer. ${LANGUAGE_RULE}`,
+    systemPrompt: `You are Hezam.0's reasoning specialist. Work through problems carefully step by step, check the arithmetic, and finish with a clearly marked final answer. Use Markdown when it helps.`,
     temperature: 0.4,
   },
 };
@@ -81,6 +78,8 @@ export interface ModelInfo extends RoutableModel {
   /** Rough RAM a phone should have to run it comfortably. */
   minRamGb: number;
   note: string;
+  /** Lower is better at translating to/from Tagalog; absent means not suited to translate. */
+  translatorRank?: number;
 }
 
 /**
@@ -90,6 +89,7 @@ export interface ModelInfo extends RoutableModel {
 export const MODELS: ModelInfo[] = [
   {
     id: 'qwen2.5-1.5b',
+    translatorRank: 3,
     name: 'Qwen2.5 1.5B Instruct',
     author: 'Alibaba Qwen',
     repo: 'Qwen/Qwen2.5-1.5B-Instruct-GGUF',
@@ -114,6 +114,7 @@ export const MODELS: ModelInfo[] = [
   },
   {
     id: 'gemma-2-2b',
+    translatorRank: 1,
     name: 'Gemma 2 2B',
     author: 'Google',
     repo: 'bartowski/gemma-2-2b-it-GGUF',
@@ -126,6 +127,7 @@ export const MODELS: ModelInfo[] = [
   },
   {
     id: 'llama-3.2-3b',
+    translatorRank: 2,
     name: 'Llama 3.2 3B',
     author: 'Meta',
     repo: 'bartowski/Llama-3.2-3B-Instruct-GGUF',
@@ -170,4 +172,14 @@ export const getModel = (id: string) => MODELS.find((m) => m.id === id);
 export function formatSize(bytes: number): string {
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`;
   return `${Math.round(bytes / 1e6)} MB`;
+}
+
+/**
+ * Model that should translate an answer. The model that just answered is reused when it
+ * can translate (no reload); otherwise the best installed multilingual model is chosen.
+ */
+export function pickTranslator(currentId: string, installed: ReadonlySet<string>): ModelInfo | null {
+  const able = MODELS.filter((m) => m.translatorRank !== undefined && installed.has(m.id));
+  if (able.length === 0) return null;
+  return able.find((m) => m.id === currentId) ?? able.sort((a, b) => a.translatorRank! - b.translatorRank!)[0];
 }

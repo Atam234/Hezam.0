@@ -18,6 +18,20 @@ internet is only needed to download models.
 
 You can override Auto with the chips above the message box.
 
+## Reply language and translator
+
+The app detects whether you wrote in Tagalog/Taglish or English (`src/router/language.ts`)
+and tells whichever model answers to reply in that language. If the answer still comes out
+in the wrong language, the **translator** passes it through an installed multilingual model
+(Gemma 2 2B, Llama 3.2 3B, or Qwen2.5 1.5B) before showing it; code blocks are left as they
+are, and "Show original" reveals the untranslated answer. An explicit request such as
+"i-translate sa English" or "explain in Tagalog" always wins.
+
+## Settings
+
+The gear icon opens Settings: reply language (Auto / Tagalog / English), translator on/off,
+**max reply tokens** (256–4096), and **context size** (2048–8192 tokens).
+
 ## Specialists and models
 
 | Specialist | Model | Size | Hugging Face |

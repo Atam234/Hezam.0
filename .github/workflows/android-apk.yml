@@ -5,6 +5,11 @@ on:
     branches: [main, 'claude/**']
   workflow_dispatch:
 
+# A newer push makes an older build pointless; each build takes close to an hour.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest

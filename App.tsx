@@ -19,7 +19,24 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import * as engine from './src/engine/engine';
 import { splitThinking, type ChatTurn } from './src/engine/types';
-import { getModel, MODELS, SPECIALIST_ORDER, SPECIALISTS, type ModelInfo } from './src/models/catalog';
+import {
+  getModel,
+  MODELS,
+  pickTranslator,
+  SPECIALIST_ORDER,
+  SPECIALISTS,
+  type ModelInfo,
+} from './src/models/catalog';
+import {
+  detectLanguage,
+  LANGUAGE_NAME,
+  languageInstruction,
+  languageReminder,
+  needsTranslation,
+  targetLanguage,
+  translationPrompt,
+  type Lang,
+} from './src/router/language';
 import { classify, pickModel, type SpecialistId } from './src/router/router';
 import {
   loadConversations,
@@ -30,16 +47,22 @@ import {
   type Message,
 } from './src/storage/chats';
 import * as downloads from './src/storage/downloads';
+import {
+  DEFAULT_SETTINGS,
+  effectiveMaxTokens,
+  historyCharBudget,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from './src/storage/settings';
 import { colors } from './src/theme';
 import { HistorySheet } from './src/ui/HistorySheet';
 import { MessageView } from './src/ui/MessageView';
 import { ModelsSheet } from './src/ui/ModelsSheet';
+import { SettingsSheet } from './src/ui/SettingsSheet';
 
 type Mode = 'auto' | SpecialistId;
 
-const MAX_REPLY_TOKENS = 1024;
-/** Rough character budget of chat history sent to the model (context is 4096 tokens). */
-const HISTORY_CHAR_BUDGET = 6000;
 const KEEP_AWAKE_TAG = 'hezam-download';
 
 const SUGGESTIONS: { specialist: SpecialistId; text: string }[] = [
@@ -49,7 +72,7 @@ const SUGGESTIONS: { specialist: SpecialistId; text: string }[] = [
   { specialist: 'reasoning', text: 'What is 15 percent of 2,500? Show the steps' },
 ];
 
-function buildTurns(systemPrompt: string, history: Message[]): ChatTurn[] {
+function buildTurns(systemPrompt: string, history: Message[], charBudget: number, reminder: string): ChatTurn[] {
   const turns: ChatTurn[] = [];
   let used = 0;
   for (let i = history.length - 1; i >= 0; i--) {
@@ -58,10 +81,12 @@ function buildTurns(systemPrompt: string, history: Message[]): ChatTurn[] {
     const content = m.role === 'assistant' ? splitThinking(m.content).answer : m.content;
     if (!content) continue;
     // Always keep the newest message; drop older ones once the budget is spent.
-    if (turns.length > 0 && used + content.length > HISTORY_CHAR_BUDGET) break;
+    if (turns.length > 0 && used + content.length > charBudget) break;
     used += content.length;
     turns.unshift({ role: m.role, content });
   }
+  const last = turns[turns.length - 1];
+  if (last?.role === 'user') last.content = `${last.content}\n\n${reminder}`;
   return [{ role: 'system', content: systemPrompt }, ...turns];
 }
 
@@ -94,6 +119,8 @@ function Chat() {
   const [status, setStatus] = useState('');
   const [showModels, setShowModels] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
   const listRef = useRef<FlatList<Message>>(null);
   const followRef = useRef(true);
@@ -109,6 +136,7 @@ function Chat() {
 
   useEffect(() => {
     loadConversations().then(setConversations);
+    loadSettings().then(setSettings);
     refreshStorage();
     return () => {
       engine.unload().catch(() => {});
@@ -151,6 +179,24 @@ function Chat() {
       }
       const specialist = SPECIALISTS[specialistId];
 
+      // Reply in the user's language: detect it from this message, or from earlier in the chat.
+      const earlier = [...history]
+        .reverse()
+        .map((m) => (m.role === 'user' ? detectLanguage(m.content) : 'unknown'))
+        .find((l): l is Lang => l !== 'unknown');
+      const target = targetLanguage(text, settings.replyLanguage, earlier);
+      const maxTokens = effectiveMaxTokens(settings);
+      const ctx = settings.contextTokens;
+
+      const load = async (m: ModelInfo) => {
+        if (engine.isLoaded(m.id, ctx)) return;
+        setStatus(`Loading ${m.name}…`);
+        await engine.ensureLoaded(m.id, downloads.modelPath(m), ctx, (p) =>
+          setStatus(`Loading ${m.name}… ${Math.round(p * 100)}%`),
+        );
+        setLoadedId(m.id);
+      };
+
       const userMessage: Message = { id: newId(), role: 'user', content: text };
       const reply: Message = {
         id: newId(),
@@ -170,30 +216,55 @@ function Chat() {
 
       let final: Message = reply;
       try {
-        if (engine.loadedModelId() !== pick.model.id) {
-          setStatus(`Loading ${pick.model.name}…`);
-          await engine.ensureLoaded(pick.model.id, downloads.modelPath(pick.model), (p) =>
-            setStatus(`Loading ${pick.model.name}… ${Math.round(p * 100)}%`),
-          );
-          setLoadedId(pick.model.id);
-        }
+        await load(pick.model);
         setStatus('Answering…');
 
         let lastPaint = 0;
+        const paint = (full: string) => {
+          // Repainting on every token is wasteful; ~12 updates a second reads as smooth.
+          const now = Date.now();
+          if (now - lastPaint < 80) return;
+          lastPaint = now;
+          patchMessage(reply.id, { content: full });
+        };
         const result = await engine.generate(
-          buildTurns(specialist.systemPrompt, base),
-          { temperature: specialist.temperature, maxTokens: MAX_REPLY_TOKENS },
-          (full) => {
-            // Repainting on every token is wasteful; ~12 updates a second reads as smooth.
-            const now = Date.now();
-            if (now - lastPaint < 80) return;
-            lastPaint = now;
-            patchMessage(reply.id, { content: full });
-          },
+          buildTurns(
+            `${specialist.systemPrompt} ${languageInstruction(target)}`,
+            base,
+            historyCharBudget(settings),
+            languageReminder(target),
+          ),
+          { temperature: specialist.temperature, maxTokens },
+          paint,
         );
         final = { ...reply, content: result.text.trim(), tokensPerSecond: result.tokensPerSecond };
         if (!splitThinking(final.content).answer) {
           final = { ...final, error: true, content: 'The model returned no answer. Please try again.' };
+        } else if (settings.autoTranslate) {
+          // Translator: some specialists drift into the wrong language. Fix the answer before showing it.
+          const answer = splitThinking(final.content).answer;
+          const translator = needsTranslation(answer, target) ? pickTranslator(pick.model.id, installed) : null;
+          if (translator) {
+            try {
+              await load(translator);
+              setStatus(`Translating to ${LANGUAGE_NAME[target]}…`);
+              const translated = await engine.generate(
+                [
+                  { role: 'system', content: translationPrompt(target) },
+                  { role: 'user', content: answer },
+                ],
+                { temperature: 0.2, maxTokens: Math.max(maxTokens, 512) },
+                paint,
+              );
+              const out = splitThinking(translated.text.trim()).answer;
+              if (out) {
+                final = { ...final, content: out, original: answer, translatedTo: target, translatorId: translator.id };
+              }
+            } catch {
+              // Translation is best-effort: keep the untranslated answer rather than lose it.
+              setLoadedId(engine.loadedModelId());
+            }
+          }
         }
       } catch (e) {
         setLoadedId(engine.loadedModelId());
@@ -210,8 +281,15 @@ function Chat() {
         persist(chatId, done);
       }
     },
-    [chatId, generating, installed, mode, patchMessage, persist],
+    [chatId, generating, installed, mode, patchMessage, persist, settings],
   );
+
+  const changeSettings = useCallback((next: Settings) => {
+    setSettings(next);
+    saveSettings(next).catch(() => {});
+  }, []);
+
+  const translatorAvailable = useMemo(() => pickTranslator('', installed) !== null, [installed]);
 
   const newChat = useCallback(() => {
     if (generating) return;
@@ -318,6 +396,15 @@ function Chat() {
           <Text style={styles.modelsPillText}>
             Models {installed.size}/{MODELS.length}
           </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setShowSettings(true)}
+          hitSlop={6}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+        >
+          <Text style={styles.icon}>⚙</Text>
         </Pressable>
         <Pressable
           onPress={newChat}
@@ -447,6 +534,13 @@ function Chat() {
         onCancel={(m) => downloads.cancelDownload(m)}
         onDelete={removeModel}
       />
+      <SettingsSheet
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={settings}
+        onChange={changeSettings}
+        translatorAvailable={translatorAvailable}
+      />
       <HistorySheet
         visible={showHistory}
         onClose={() => setShowHistory(false)}
@@ -476,7 +570,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8, gap: 4 },
-  iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
   icon: { color: colors.text, fontSize: 20 },
   headerCenter: { flex: 1, paddingLeft: 4 },
   brand: { color: colors.text, fontSize: 19, fontWeight: '700', letterSpacing: 0.2 },
