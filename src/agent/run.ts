@@ -8,7 +8,7 @@ import * as google from '../translate/google';
 import type { AgentConfig } from './config';
 import { replySchema, runAgent, type AgentStep, type Tool } from './core';
 import * as files from './files';
-import { directCommand } from './intent';
+import { planCommand } from './intent';
 import { callApi, callLocal } from './llm';
 import { buildTools, phoneControlEnabled } from './tools';
 
@@ -59,25 +59,34 @@ export async function runTask(o: TaskOptions): Promise<TaskResult> {
   };
   const tools = await availableTools(o.config);
 
-  // 1. One-step commands ("open Chrome", "go home") need no model at all.
-  const direct = directCommand(o.task);
-  if (direct) {
-    const tool = tools.find((t) => t.name === direct.tool);
-    if (!tool) {
-      const what = /file/.test(direct.tool) ? 'No folder is shared with the agent yet.' : 'Phone control is off.';
-      return { final: `${what} ${SETUP_HINT}`, steps, brain: 'direct', needsSetup: true };
-    }
+  // 1. Commands the app understands outright ("open Chrome and search weather", "play Buwan")
+  //    are run step by step with no model involved, so they cannot be talked around.
+  const plan = planCommand(o.task);
+  if (plan) {
     o.onStatus?.('Working…');
-    try {
-      const result = await tool.run(direct.args);
-      record({ tool: direct.tool, args: direct.args, result, failed: false });
-      const informative = ['list_files', 'read_file', 'list_apps', 'read_screen'].includes(direct.tool);
-      return { final: informative ? result : firstLine(result), steps, brain: 'direct' };
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      record({ tool: direct.tool, args: direct.args, result: `ERROR: ${message}`, failed: true });
-      return { final: message, steps, brain: 'direct', needsSetup: /is off|not found|No folder/i.test(message) };
+    let last = '';
+    for (const [index, step] of plan.entries()) {
+      if (o.cancelled?.()) return { final: 'Stopped.', steps, brain: 'direct' };
+      const tool = tools.find((t) => t.name === step.tool);
+      if (!tool) {
+        const what = /file/.test(step.tool) ? 'No folder is shared with the agent yet.' : 'Phone control is off.';
+        const done = index > 0 ? `Did ${index} of ${plan.length} steps. ` : '';
+        return { final: `${done}${what} ${SETUP_HINT}`, steps, brain: 'direct', needsSetup: true };
+      }
+      try {
+        last = await tool.run(step.args);
+        record({ tool: step.tool, args: step.args, result: last, failed: false });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        record({ tool: step.tool, args: step.args, result: `ERROR: ${message}`, failed: true });
+        return { final: message, steps, brain: 'direct', needsSetup: /is off|No folder/i.test(message) };
+      }
+      // Give the screen time to settle before the next step acts on it.
+      if (index < plan.length - 1) await new Promise((r) => setTimeout(r, 1500));
     }
+    const lastTool = plan[plan.length - 1].tool;
+    const informative = ['list_files', 'read_file', 'list_apps', 'read_screen'].includes(lastTool);
+    return { final: informative ? last : firstLine(last), steps, brain: 'direct' };
   }
 
   if (tools.length === 0) throw new SetupNeeded(`The agent has no access yet. ${SETUP_HINT}`);

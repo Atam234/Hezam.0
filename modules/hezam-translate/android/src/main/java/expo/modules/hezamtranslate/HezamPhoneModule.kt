@@ -2,11 +2,15 @@ package expo.modules.hezamtranslate
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
+import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.accessibility.AccessibilityNodeInfo
@@ -68,6 +72,50 @@ class HezamPhoneModule : Module() {
     }
     if (nodes.isEmpty()) sb.append("(nothing readable on this screen)\n")
     return sb.toString()
+  }
+
+  /** Visible text of an element: what it shows plus its accessibility label. */
+  private fun label(node: AccessibilityNodeInfo): String {
+    val text = node.text?.toString() ?: ""
+    val description = node.contentDescription?.toString() ?: ""
+    return if (description.isBlank()) text else if (text.isBlank()) description else "$text $description"
+  }
+
+  private fun findAll(
+    node: AccessibilityNodeInfo?,
+    out: MutableList<AccessibilityNodeInfo>,
+    depth: Int,
+    limit: Int,
+    match: (AccessibilityNodeInfo) -> Boolean
+  ) {
+    if (node == null || out.size >= limit || depth > MAX_DEPTH) return
+    if (node.isVisibleToUser && match(node)) out.add(node)
+    for (i in 0 until node.childCount) {
+      findAll(node.getChild(i), out, depth + 1, limit, match)
+    }
+  }
+
+  private fun findApp(pm: PackageManager, name: String): ResolveInfo? {
+    val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    val apps = pm.queryIntentActivities(launcher, 0)
+    val query = name.trim().lowercase()
+    return apps.firstOrNull { it.loadLabel(pm).toString().lowercase() == query }
+      ?: apps.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(query) }
+      ?: apps.firstOrNull { it.activityInfo.packageName.lowercase() == query }
+  }
+
+  /** The text box to type into: the focused one, or else the first one on screen. */
+  private fun inputBox(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+    if (focused != null && focused.isEditable) return focused
+    val found = ArrayList<AccessibilityNodeInfo>()
+    findAll(root, found, 0, 1) { it.isEditable }
+    return found.firstOrNull()
+  }
+
+  private fun pressImeEnter(node: AccessibilityNodeInfo): Boolean {
+    if (Build.VERSION.SDK_INT < 30) return false
+    return node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
   }
 
   private fun gesture(svc: AccessibilityService, path: Path, durationMs: Long): Boolean {
@@ -137,13 +185,7 @@ class HezamPhoneModule : Module() {
     AsyncFunction("openApp") { name: String ->
       val ctx = context()
       val pm = ctx.packageManager
-      val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-      val apps = pm.queryIntentActivities(launcher, 0)
-      val query = name.trim().lowercase()
-      val match = apps.firstOrNull { it.loadLabel(pm).toString().lowercase() == query }
-        ?: apps.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(query) }
-        ?: apps.firstOrNull { it.activityInfo.packageName.lowercase() == query }
-        ?: throw phoneError("No installed app matches \"$name\".")
+      val match = findApp(pm, name) ?: throw phoneError("No installed app matches \"$name\".")
       val intent = pm.getLaunchIntentForPackage(match.activityInfo.packageName)
         ?: throw phoneError("\"$name\" cannot be opened.")
       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -208,6 +250,106 @@ class HezamPhoneModule : Module() {
         path.lineTo(x, to)
         gesture(svc, path, 300L)
       }
+    }
+
+    // Taps whatever on screen shows the given words, e.g. a button labelled "Play".
+    AsyncFunction("tapText") { text: String ->
+      val svc = service()
+      val query = text.trim().lowercase()
+      if (query.isEmpty()) throw phoneError("Say what to tap.")
+      val found = ArrayList<AccessibilityNodeInfo>()
+      findAll(svc.rootInActiveWindow, found, 0, 40) { !it.isEditable && label(it).lowercase().contains(query) }
+      val target = found.firstOrNull { label(it).trim().lowercase() == query }
+        ?: found.minByOrNull { label(it).length }
+        ?: throw phoneError("Nothing on screen says \"$text\".")
+      if (!click(svc, target)) throw phoneError("\"$text\" could not be tapped.")
+      label(target).trim().take(60)
+    }
+
+    // Types into the focused text box, or the first one on screen. Resolves "no-input"
+    // when the screen has no text box, "submitted" when Enter was pressed too.
+    AsyncFunction("typeAuto") { text: String, submit: Boolean ->
+      val svc = service()
+      val root = svc.rootInActiveWindow ?: throw phoneError("The screen cannot be read right now.")
+      val input = inputBox(root)
+      if (input == null) {
+        "no-input"
+      } else {
+        input.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        val args = Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        if (!input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+          throw phoneError("The text box did not accept the text.")
+        }
+        if (!submit) {
+          "typed"
+        } else if (pressImeEnter(input)) {
+          "submitted"
+        } else {
+          "typed-not-submitted"
+        }
+      }
+    }
+
+    AsyncFunction<Boolean>("pressEnter") {
+      val svc = service()
+      val root = svc.rootInActiveWindow
+      val input = if (root == null) null else inputBox(root)
+      if (input == null) false else pressImeEnter(input)
+    }
+
+    // Taps the search icon or search field of the current app, to bring up its search box.
+    AsyncFunction<Boolean>("tapSearch") {
+      val svc = service()
+      val found = ArrayList<AccessibilityNodeInfo>()
+      findAll(svc.rootInActiveWindow, found, 0, 10) { node ->
+        val id = node.viewIdResourceName?.lowercase() ?: ""
+        val words = label(node).lowercase()
+        words.contains("search") || words.contains("hanap") || id.contains("search")
+      }
+      val target = found.firstOrNull()
+      if (target == null) false else click(svc, target)
+    }
+
+    // Taps the first item below the top bar that mentions the query: the first search result.
+    AsyncFunction("tapFirstResult") { query: String ->
+      val svc = service()
+      val words = query.lowercase().split(' ').filter { it.length >= 3 }
+      val minTop = (svc.resources.displayMetrics.heightPixels * 0.14f).toInt()
+      val found = ArrayList<AccessibilityNodeInfo>()
+      findAll(svc.rootInActiveWindow, found, 0, 60) { node ->
+        if (node.isEditable) {
+          false
+        } else {
+          val bounds = Rect()
+          node.getBoundsInScreen(bounds)
+          val words2 = label(node).lowercase()
+          bounds.top > minTop && words2.length > 8 && (words.isEmpty() || words.any { words2.contains(it) })
+        }
+      }
+      val target = found.firstOrNull() ?: throw phoneError("No result for \"$query\" is on screen yet.")
+      if (!click(svc, target)) throw phoneError("The first result could not be tapped.")
+      label(target).trim().take(80)
+    }
+
+    // Asks a music app to find and play something (Android's standard "play from search").
+    AsyncFunction("playFromSearch") { query: String, app: String ->
+      val ctx = context()
+      val intent = Intent("android.media.action.MEDIA_PLAY_FROM_SEARCH")
+      intent.putExtra("query", query)
+      intent.putExtra("android.intent.extra.focus", "vnd.android.cursor.item/*")
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      if (app.isNotBlank()) {
+        val match = findApp(ctx.packageManager, app) ?: throw phoneError("No installed app matches \"$app\".")
+        intent.setPackage(match.activityInfo.packageName)
+      }
+      val starter: Context = HezamAccessibilityService.instance ?: ctx
+      try {
+        starter.startActivity(intent)
+      } catch (e: ActivityNotFoundException) {
+        throw phoneError("No music app on this phone can play from a search.")
+      }
+      true
     }
 
     AsyncFunction("pressButton") { button: String ->

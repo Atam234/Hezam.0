@@ -70,6 +70,13 @@ one tool call at a time (`src/agent/core.ts`), showing every step.
   the screen as a numbered list of elements and tap, type, scroll and press system buttons.
   It is off until you enable "Hezam.0 phone control" in Android's Accessibility settings.
 
+Besides reading the screen and tapping by number, the agent has higher-level actions that do
+the fiddly parts itself: `search_here` finds the open app's search box, types and presses
+Enter; `tap_text` taps whatever shows the given words; `type_here` types into the focused
+box; `play_media` plays a song through a music app or starts the first YouTube result.
+Multi-part commands such as "buksan ang Chrome at i-search ang weather" or "open Facebook,
+search Jollibee, then tap Follow" are split into steps and run in order.
+
 Commands typed in the normal chat are carried out too: `src/agent/intent.ts` recognises a
 command ("buksan ang Chrome", "list my files", "search cats on YouTube") and runs it. One-step
 commands are executed directly with no model involved. For longer tasks a local model is

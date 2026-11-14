@@ -29,6 +29,17 @@ export interface HezamPhoneNative {
   typeText(index: number, text: string): Promise<boolean>;
   scroll(direction: string): Promise<boolean>;
   pressButton(button: string): Promise<boolean>;
+  /** Taps the element showing these words; resolves with its label. */
+  tapText(text: string): Promise<string>;
+  /** Types into the focused or first text box: 'no-input' | 'typed' | 'submitted' | 'typed-not-submitted'. */
+  typeAuto(text: string, submit: boolean): Promise<string>;
+  pressEnter(): Promise<boolean>;
+  /** Taps the current app's search icon or field. */
+  tapSearch(): Promise<boolean>;
+  /** Taps the first search result that mentions the query; resolves with its label. */
+  tapFirstResult(query: string): Promise<string>;
+  /** Asks a music app (optionally a named one) to find and play something. */
+  playFromSearch(query: string, app: string): Promise<boolean>;
 }
 
 /** Null on platforms without the native module (iOS, web). */
