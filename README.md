@@ -56,6 +56,23 @@ depends on the speech packs installed on the phone. The AI model itself stays lo
 copies it in, and you choose which specialist it is best at; matching questions are then
 routed to it ahead of the built-in model for that specialist.
 
+## Agent mode
+
+The **Agent** button opens a task runner: you describe a task and the agent works through it
+one tool call at a time (`src/agent/core.ts`), showing every step.
+
+- **Brain** — an OpenAI-compatible **AI API** with your own key (presets for Claude, OpenAI,
+  OpenRouter and Groq; the key is kept in the device keystore), or an installed **local
+  model**. Small local models are unreliable at multi-step work; they suit simple file tasks.
+- **Files** — the agent sees only the one folder you share through Android's folder picker.
+  Creating and editing files is off until you allow it, and overwriting or deleting asks first.
+- **Phone control** — an accessibility service (`modules/hezam-translate`) lets the agent read
+  the screen as a numbered list of elements and tap, type, scroll and press system buttons.
+  It is off until you enable "Hezam.0 phone control" in Android's Accessibility settings.
+
+With an API brain, the task, any file contents the agent reads and the on-screen text it sees
+are sent to that provider. With a local model nothing leaves the phone.
+
 ## Specialists and models
 
 | Specialist | Model | Size | Hugging Face |

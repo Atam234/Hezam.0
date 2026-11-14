@@ -59,6 +59,7 @@ import {
 } from './src/storage/settings';
 import { colors } from './src/theme';
 import * as google from './src/translate/google';
+import { AgentSheet } from './src/ui/AgentSheet';
 import { AccentCard, IconButton, PillButton } from './src/ui/Buttons';
 import { HistorySheet } from './src/ui/HistorySheet';
 import { MessageView } from './src/ui/MessageView';
@@ -141,6 +142,7 @@ function Chat() {
   const [googlePack, setGooglePack] = useState<google.PackState>('unavailable');
   const [packBusy, setPackBusy] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
+  const [showAgent, setShowAgent] = useState(false);
   const [custom, setCustom] = useState<CustomModel[]>([]);
   const [importing, setImporting] = useState(false);
 
@@ -474,6 +476,15 @@ function Chat() {
     });
   }, []);
 
+  /** Loads the best installed model for agent work and resolves with its name. */
+  const prepareLocalAgent = useCallback(async () => {
+    const pick = pickModel('reasoning', models, installed);
+    if (!pick) throw new Error('No local model is installed. Download one in Models, or use an AI API.');
+    await engine.ensureLoaded(pick.model.id, downloads.modelPath(pick.model), settings.contextTokens);
+    setLoadedId(pick.model.id);
+    return pick.model.name;
+  }, [installed, models, settings.contextTokens]);
+
   const askByVoice = useCallback(
     async (text: string, onPartial: (answer: string, lang: Lang) => void): Promise<VoiceAnswer | null> => {
       const m = await send(text, { voice: true, onPartial });
@@ -581,6 +592,7 @@ function Chat() {
             contentContainerStyle={styles.modes}
             keyboardShouldPersistTaps="handled"
           >
+            <PillButton small icon="flash" label="Agent" onPress={() => setShowAgent(true)} />
             <ModeChip label="◈ Auto" active={mode === 'auto'} color={colors.accent} onPress={() => setMode('auto')} />
             {SPECIALIST_ORDER.map((id) => (
               <ModeChip
@@ -653,6 +665,12 @@ function Chat() {
         packBusy={packBusy}
         onDownloadPack={downloadPack}
       />
+      <AgentSheet
+        visible={showAgent}
+        onClose={() => setShowAgent(false)}
+        chatBusy={generating}
+        prepareLocal={prepareLocalAgent}
+      />
       <VoiceSheet
         visible={showVoice}
         onClose={() => setShowVoice(false)}
@@ -724,7 +742,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
 
   dock: { paddingBottom: 8, gap: 8 },
-  modes: { paddingHorizontal: 12, gap: 8 },
+  modes: { paddingHorizontal: 12, gap: 8, alignItems: 'center', paddingVertical: 4 },
   chip: {
     borderColor: colors.border,
     borderWidth: 1,

@@ -6,6 +6,8 @@ export interface ChatTurn {
 export interface GenerateOptions {
   temperature: number;
   maxTokens: number;
+  /** Constrain the output to a JSON object (used by the agent). */
+  json?: boolean;
 }
 
 export interface GenerateResult {

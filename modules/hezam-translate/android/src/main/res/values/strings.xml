@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="hezam_accessibility_label">Hezam.0 phone control</string>
+  <string name="hezam_accessibility_description">Lets the Hezam.0 agent read what is on screen and tap, type and scroll for you while it carries out a task you started. It only acts during a task you start in Agent mode, and you can turn it off here at any time.</string>
+</resources>

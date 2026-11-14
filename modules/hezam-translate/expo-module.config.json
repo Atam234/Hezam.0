@@ -5,7 +5,8 @@
   "android": {
     "modules": [
       "expo.modules.hezamtranslate.HezamTranslateModule",
-      "expo.modules.hezamtranslate.HezamFilesModule"
+      "expo.modules.hezamtranslate.HezamFilesModule",
+      "expo.modules.hezamtranslate.HezamPhoneModule"
     ]
   }
 }

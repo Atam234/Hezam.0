@@ -67,6 +67,7 @@ export async function generate(
       temperature: options.temperature,
       top_p: 0.9,
       stop: STOP_WORDS,
+      ...(options.json ? { response_format: { type: 'json_object' as const } } : {}),
     },
     (data) => {
       text += data.token;

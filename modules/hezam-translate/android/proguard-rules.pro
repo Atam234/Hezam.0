@@ -7,3 +7,6 @@
 -keep class com.google.firebase.components.** { *; }
 -keep class * implements com.google.firebase.components.ComponentRegistrar { *; }
 -keepnames class com.google.android.gms.common.internal.** { *; }
+
+# Android starts the accessibility service by the class name written in the manifest.
+-keep class expo.modules.hezamtranslate.HezamAccessibilityService { *; }

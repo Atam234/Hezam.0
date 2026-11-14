@@ -1,3 +1,26 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+  <!-- Lets the agent find installed apps by name so it can open them. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+  </queries>
+
+  <application>
+    <!-- Phone control. Off until the user turns it on in Android's Accessibility settings. -->
+    <service
+      android:name="expo.modules.hezamtranslate.HezamAccessibilityService"
+      android:exported="true"
+      android:label="@string/hezam_accessibility_label"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+      <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/hezam_accessibility" />
+    </service>
+  </application>
 </manifest>

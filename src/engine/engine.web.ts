@@ -38,6 +38,15 @@ export async function generate(
   stopped = false;
   const question = messages[messages.length - 1]?.content ?? '';
   const system = messages[0]?.content ?? '';
+  if (/Hezam\.0's agent/.test(system)) {
+    // Demo agent: list the folder once, then report it.
+    const seen = messages.find((m) => m.content.startsWith('Result of list_files'));
+    const demo = seen
+      ? JSON.stringify({ final: `Demo: I found these files:\n${seen.content.split('\n').slice(1, -2).join('\n')}` })
+      : JSON.stringify({ thought: 'look in the folder', tool: 'list_files', args: { path: '' } });
+    onText(demo);
+    return { text: demo, tokensPerSecond: 42 };
+  }
   const isCode = /coding specialist/.test(system);
   if (/professional translator/.test(system)) {
     const fake = `*(Demo translation into ${/Tagalog/.test(system) ? 'Tagalog' : 'English'})*\n\n${question}`;
