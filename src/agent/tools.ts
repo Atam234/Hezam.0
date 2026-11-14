@@ -151,6 +151,7 @@ export function buildTools(access: ToolAccess): Tool[] {
           name: 'tap',
           description: 'Tap an element from the latest screen list.',
           args: { index: 'element number' },
+          integerArgs: ['index'],
           run: async (a) => {
             const index = int(a.index, 'index');
             await phone.tap(index);
@@ -161,6 +162,7 @@ export function buildTools(access: ToolAccess): Tool[] {
           name: 'type_text',
           description: 'Type text into an editable element from the latest screen list.',
           args: { index: 'element number', text: 'text to type' },
+          integerArgs: ['index'],
           run: async (a) => {
             const index = int(a.index, 'index');
             await phone.typeText(index, str(a.text, 'text'));

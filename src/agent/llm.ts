@@ -34,8 +34,11 @@ export async function callApi(config: AgentConfig, apiKey: string, messages: Age
   return content;
 }
 
-/** Runs the agent step on the model already loaded in the local engine. */
-export async function callLocal(messages: AgentMessage[]): Promise<string> {
-  const result = await engine.generate(messages, { temperature: 0.2, maxTokens: 400, json: true }, () => {});
+/**
+ * Runs the agent step on the model already loaded in the local engine.
+ * `schema` becomes the output grammar, so the reply is always a valid tool call or final answer.
+ */
+export async function callLocal(messages: AgentMessage[], schema: object): Promise<string> {
+  const result = await engine.generate(messages, { temperature: 0.2, maxTokens: 400, jsonSchema: schema }, () => {});
   return result.text;
 }

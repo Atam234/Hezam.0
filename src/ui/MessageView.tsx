@@ -36,6 +36,7 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
   const thinking = split.thinking;
   const answer = showOriginal && message.original ? message.original : split.answer;
   const translator = message.translatorId ? getModel(message.translatorId) : undefined;
+  const agent = message.agentSteps !== undefined;
   const why = message.manual
     ? 'you chose this'
     : message.matched?.length
@@ -51,9 +52,13 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
   return (
     <View style={styles.assistant}>
       <View style={styles.badgeRow}>
-        <View style={[styles.badge, { borderColor: specialist.color }]}>
-          <Text style={[styles.badgeGlyph, { color: specialist.color }]}>{specialist.glyph}</Text>
-          <Text style={[styles.badgeText, { color: specialist.color }]}>{specialist.name}</Text>
+        <View style={[styles.badge, { borderColor: agent ? AGENT_COLOR : specialist.color }]}>
+          <Text style={[styles.badgeGlyph, { color: agent ? AGENT_COLOR : specialist.color }]}>
+            {agent ? '⚡' : specialist.glyph}
+          </Text>
+          <Text style={[styles.badgeText, { color: agent ? AGENT_COLOR : specialist.color }]}>
+            {agent ? 'Agent' : specialist.name}
+          </Text>
         </View>
         {model && (
           <Text style={styles.modelName} numberOfLines={1}>
@@ -61,7 +66,24 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
           </Text>
         )}
       </View>
-      <Text style={styles.why}>
+      {agent ? (
+        <View style={styles.steps}>
+          <Text style={styles.why}>
+            {message.agentBrain === 'direct'
+              ? 'Did it directly'
+              : message.agentBrain === 'api'
+                ? 'Agent · AI API'
+                : 'Agent · local model'}
+          </Text>
+          {message.agentSteps!.map((s, i) => (
+            <Text key={i} style={styles.step} numberOfLines={2}>
+              <Text style={s.failed ? styles.stepFailed : styles.stepOk}>{s.failed ? '✕' : '✓'}</Text> {s.tool}
+              {s.summary ? ` — ${s.summary}` : ''}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      <Text style={[styles.why, agent && styles.hidden]}>
         Auto-route: {why}
         {message.fallback ? ' · stand-in model (specialist not installed)' : ''}
         {message.translatedTo
@@ -96,7 +118,14 @@ export const MessageView = memo(function MessageView({ message, status }: Props)
   );
 });
 
+const AGENT_COLOR = '#A78BFA';
+
 const styles = StyleSheet.create({
+  steps: { gap: 3 },
+  step: { color: colors.textDim, fontSize: 13, lineHeight: 19 },
+  stepOk: { color: '#34D399' },
+  stepFailed: { color: colors.danger },
+  hidden: { display: 'none' },
   userRow: { alignItems: 'flex-end', marginVertical: 8 },
   userBubble: {
     maxWidth: '85%',

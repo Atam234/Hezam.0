@@ -86,3 +86,21 @@ test('old exchanges are dropped from the prompt', async () => {
   await runAgent({ task: 't', tools: [echo], llm: s.llm, maxSteps: 5, keepExchanges: 2 });
   assert.deepEqual(s.seen, [2, 4, 6, 6, 6]);
 });
+
+test('a talk-only first reply is retried when the task is a command', async () => {
+  const s = scripted(['Sure, I will open Chrome for you!', '{"tool":"echo","args":{"text":"go"}}', '{"final":"ok"}']);
+  const steps: AgentStep[] = [];
+  const r = await runAgent({ task: 't', tools: [echo], llm: s.llm, mustActFirst: true, onStep: (x) => steps.push(x) });
+  assert.equal(steps.length, 1);
+  assert.equal(r.final, 'ok');
+});
+
+test('reply schema lists each tool with typed arguments', async () => {
+  const { replySchema } = await import('../src/agent/core.ts');
+  const tap = { name: 'tap', description: '', args: { index: 'n' }, integerArgs: ['index'] };
+  const schema = replySchema([echo, tap], false) as { anyOf: any[] };
+  assert.equal(schema.anyOf.length, 2);
+  assert.deepEqual(schema.anyOf[1].properties.tool, { const: 'tap' });
+  assert.deepEqual(schema.anyOf[1].properties.args.properties, { index: { type: 'integer' } });
+  assert.equal((replySchema([echo], true) as { anyOf: any[] }).anyOf.length, 2);
+});

@@ -23,6 +23,9 @@ export interface Message {
   /** The untranslated answer, kept so the user can compare. */
   original?: string;
   error?: boolean;
+  /** Set when the agent acted on this message: the steps it took. */
+  agentSteps?: { tool: string; failed: boolean; summary: string }[];
+  agentBrain?: 'direct' | 'api' | 'local';
 }
 
 export interface Conversation {

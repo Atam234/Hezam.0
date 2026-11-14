@@ -59,6 +59,9 @@ import {
 } from './src/storage/settings';
 import { colors } from './src/theme';
 import * as google from './src/translate/google';
+import { loadAgentConfig, loadApiKey } from './src/agent/config';
+import { isAction } from './src/agent/intent';
+import { runTask, SetupNeeded } from './src/agent/run';
 import { AgentSheet } from './src/ui/AgentSheet';
 import { AccentCard, IconButton, PillButton } from './src/ui/Buttons';
 import { HistorySheet } from './src/ui/HistorySheet';
@@ -154,6 +157,7 @@ function Chat() {
 
   const listRef = useRef<FlatList<Message>>(null);
   const followRef = useRef(true);
+  const agentCancel = useRef(false);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const conversationsRef = useRef(conversations);
@@ -194,16 +198,99 @@ function Chat() {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   }, []);
 
+  /** Loads the best installed model for agent work and resolves with its name. */
+  const prepareLocalAgent = useCallback(async () => {
+    const pick = pickModel('reasoning', models, installed);
+    if (!pick) throw new Error('No local model is installed. Download one in Models, or use an AI API.');
+    await engine.ensureLoaded(pick.model.id, downloads.modelPath(pick.model), settings.contextTokens);
+    setLoadedId(pick.model.id);
+    return pick.model.name;
+  }, [installed, models, settings.contextTokens]);
+
+  /**
+   * Carries out a command from the chat with the agent. Resolves null when the message
+   * turned out not to be something the agent can do, so the chat answers it normally.
+   */
+  const act = useCallback(
+    async (text: string, history: Message[]): Promise<Message | null> => {
+      const userMessage: Message = { id: newId(), role: 'user', content: text };
+      const reply: Message = { id: newId(), role: 'assistant', content: '', agentSteps: [] };
+      const base = [...history, userMessage];
+      setMessages([...base, reply]);
+      setInput('');
+      setGenerating(true);
+      setStatus('Working…');
+      agentCancel.current = false;
+      followRef.current = true;
+
+      let final: Message | null = reply;
+      try {
+        const [config, apiKey] = await Promise.all([loadAgentConfig(), loadApiKey()]);
+        const steps: NonNullable<Message['agentSteps']> = [];
+        const result = await runTask({
+          task: text,
+          config,
+          apiKey,
+          prepareLocal: prepareLocalAgent,
+          mustAct: true,
+          cancelled: () => agentCancel.current,
+          onStatus: setStatus,
+          onStep: (s) => {
+            const args = Object.values(s.args).map(String).join(', ');
+            steps.push({ tool: s.tool, failed: s.failed, summary: (s.failed ? s.result : args).slice(0, 80) });
+            patchMessage(reply.id, { agentSteps: [...steps] });
+          },
+        });
+        // "open source" is not an app: when a guessed one-step command finds nothing, just chat.
+        if (result.brain === 'direct' && steps.length === 1 && steps[0].failed && /No installed app matches/.test(result.final)) {
+          final = null;
+        } else {
+          final = { ...reply, content: result.final || 'Done.', agentSteps: steps, agentBrain: result.brain };
+        }
+      } catch (e) {
+        setLoadedId(engine.loadedModelId());
+        final = {
+          ...reply,
+          error: !(e instanceof SetupNeeded),
+          content: errorText(e),
+          agentSteps: reply.agentSteps,
+          agentBrain: 'direct',
+        };
+      } finally {
+        setStatus('');
+        setGenerating(false);
+        if (final) {
+          const done = [...base, final];
+          setMessages(done);
+          persist(chatId, done);
+        } else {
+          setMessages(history);
+          setInput(text);
+        }
+      }
+      return final;
+    },
+    [chatId, patchMessage, persist, prepareLocalAgent],
+  );
+
   const send = useCallback(
     async (raw: string, opts: SendOptions = {}): Promise<Message | null> => {
       const text = raw.trim();
       if (!text || generating) return null;
+
+      // A command ("buksan ang Chrome", "ilista ang files ko") is carried out, not just answered.
+      if (mode === 'auto' && !opts.voice && isAction(text)) {
+        const acted = await act(text, messagesRef.current);
+        if (acted) return acted;
+      }
+
       if (installed.size === 0) {
         if (!opts.voice) setShowModels(true);
         return null;
       }
 
       const history = messagesRef.current;
+
       const previous = [...history].reverse().find((m) => m.role === 'assistant')?.specialist;
       const manual = mode !== 'auto';
       const decision = manual ? null : classify(text, previous);
@@ -355,7 +442,7 @@ function Chat() {
       }
       return final;
     },
-    [chatId, generating, installed, mode, models, patchMessage, persist, settings],
+    [act, chatId, generating, installed, mode, models, patchMessage, persist, settings],
   );
 
   const changeSettings = useCallback((next: Settings) => {
@@ -475,15 +562,6 @@ function Chat() {
       return next;
     });
   }, []);
-
-  /** Loads the best installed model for agent work and resolves with its name. */
-  const prepareLocalAgent = useCallback(async () => {
-    const pick = pickModel('reasoning', models, installed);
-    if (!pick) throw new Error('No local model is installed. Download one in Models, or use an AI API.');
-    await engine.ensureLoaded(pick.model.id, downloads.modelPath(pick.model), settings.contextTokens);
-    setLoadedId(pick.model.id);
-    return pick.model.name;
-  }, [installed, models, settings.contextTokens]);
 
   const askByVoice = useCallback(
     async (text: string, onPartial: (answer: string, lang: Lang) => void): Promise<VoiceAnswer | null> => {
@@ -622,7 +700,10 @@ function Chat() {
                 icon="stop"
                 variant="accent"
                 iconSize={16}
-                onPress={() => engine.stop().catch(() => {})}
+                onPress={() => {
+                  agentCancel.current = true;
+                  engine.stop().catch(() => {});
+                }}
                 accessibilityLabel="Stop"
               />
             ) : (

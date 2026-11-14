@@ -70,6 +70,12 @@ one tool call at a time (`src/agent/core.ts`), showing every step.
   the screen as a numbered list of elements and tap, type, scroll and press system buttons.
   It is off until you enable "Hezam.0 phone control" in Android's Accessibility settings.
 
+Commands typed in the normal chat are carried out too: `src/agent/intent.ts` recognises a
+command ("buksan ang Chrome", "list my files", "search cats on YouTube") and runs it. One-step
+commands are executed directly with no model involved. For longer tasks a local model is
+given a JSON-schema grammar built from the available tools, so it must call a tool instead of
+replying with prose.
+
 With an API brain, the task, any file contents the agent reads and the on-screen text it sees
 are sent to that provider. With a local model nothing leaves the phone.
 

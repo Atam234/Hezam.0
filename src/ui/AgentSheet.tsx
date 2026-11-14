@@ -24,10 +24,11 @@ import {
   saveApiKey,
   type AgentConfig,
 } from '../agent/config';
-import { runAgent, type AgentStep } from '../agent/core';
+import type { AgentStep } from '../agent/core';
 import * as files from '../agent/files';
-import { callApi, callLocal } from '../agent/llm';
-import { buildTools, openAccessibilitySettings, phoneControlEnabled, phoneSupported } from '../agent/tools';
+import { isAction } from '../agent/intent';
+import { runTask } from '../agent/run';
+import { openAccessibilitySettings, phoneControlEnabled, phoneSupported } from '../agent/tools';
 import { colors, mono } from '../theme';
 import { PillButton } from './Buttons';
 
@@ -92,33 +93,16 @@ export function AgentSheet({ visible, onClose, chatBusy, prepareLocal }: Props) 
     setRunning(true);
     activateKeepAwakeAsync(KEEP_AWAKE).catch(() => {});
     try {
-      const local = config.brain === 'local';
-      if (local) {
-        if (chatBusy) throw new Error('Wait for the chat answer to finish first.');
-        setStatus('Loading the local model…');
-        setStatus(`Working with ${await prepareLocal()}…`);
-      } else {
-        if (!apiKey.trim()) throw new Error('Enter your API key first.');
-        setStatus(`Working with ${config.model}…`);
-      }
-      const phoneControl = await phoneControlEnabled();
-      const tools = buildTools({
-        files: (await files.grantedFolder()) !== null,
-        fileChanges: config.allowFileChanges,
-        phoneControl,
-      });
-      if (tools.length === 0) throw new Error('Give the agent access first: share a folder or turn on phone control.');
-
-      const result = await runAgent({
+      if (chatBusy) throw new Error('Wait for the chat answer to finish first.');
+      const result = await runTask({
         task: goal,
-        tools,
-        llm: local ? callLocal : (messages) => callApi(config, apiKey.trim(), messages),
+        config,
+        apiKey,
+        prepareLocal,
+        mustAct: isAction(goal),
         onStep: (step) => setSteps((prev) => [...prev, step]),
+        onStatus: setStatus,
         cancelled: () => cancel.current,
-        // A small local model has a short context: keep its prompt tight.
-        maxSteps: local ? 8 : 15,
-        maxResultChars: local ? 1500 : 3000,
-        keepExchanges: local ? 2 : 6,
       });
       setFinal(result.final);
     } catch (e) {
@@ -167,8 +151,9 @@ export function AgentSheet({ visible, onClose, chatBusy, prepareLocal }: Props) 
               </View>
               {local ? (
                 <Text style={styles.help}>
-                  Runs on your installed model, fully offline. Small models often pick the wrong step, so this
-                  suits simple file tasks; use an API for controlling apps.
+                  Runs on your installed model, fully offline. Simple commands like "open Chrome" work
+                  instantly. For longer tasks a small model can still pick a wrong step; an API is more
+                  reliable for those.
                 </Text>
               ) : (
                 <>
@@ -225,7 +210,7 @@ export function AgentSheet({ visible, onClose, chatBusy, prepareLocal }: Props) 
                     accessibilityLabel="API key"
                   />
                   <Text style={styles.help}>
-                    Your key is stored in the phone's secure keystore. With an API, your task, the files the
+                    Leave the key empty to use your local model instead. Your key is stored in the phone's secure keystore. With an API, your task, the files the
                     agent reads and the on-screen text it sees are sent to that provider.
                   </Text>
                 </>

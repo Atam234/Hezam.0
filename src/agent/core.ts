@@ -15,6 +15,8 @@ export interface ToolSpec {
   description: string;
   /** Argument name -> short description. */
   args: Record<string, string>;
+  /** Arguments that are whole numbers; all others are strings. */
+  integerArgs?: string[];
 }
 
 export type ToolRunner = (args: Record<string, unknown>) => Promise<string>;
@@ -109,8 +111,13 @@ const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}\n
 export interface RunOptions {
   task: string;
   tools: Tool[];
-  /** Sends the conversation to the model and returns its reply. */
-  llm: (messages: AgentMessage[]) => Promise<string>;
+  /** Sends the conversation to the model and returns its reply. `step` starts at 0. */
+  llm: (messages: AgentMessage[], info: { step: number }) => Promise<string>;
+  /**
+   * The task is a command to act, so a reply with no tool call on the very first step is
+   * the model talking instead of doing. It is asked again instead of being accepted.
+   */
+  mustActFirst?: boolean;
   onStep?: (step: AgentStep) => void;
   /** Returns true when the user pressed Stop. */
   cancelled?: () => boolean;
@@ -140,10 +147,28 @@ export async function runAgent(o: RunOptions): Promise<RunResult> {
 
   for (let step = 0; step < maxSteps; step++) {
     if (o.cancelled?.()) return { final: 'Stopped.', steps: step, stopped: 'cancelled' };
-    const reply = await o.llm([...head, ...exchanges.slice(-keep).flat()]);
+    const prompt = [...head, ...exchanges.slice(-keep).flat()];
+    let reply = await o.llm(prompt, { step });
     if (o.cancelled?.()) return { final: 'Stopped.', steps: step, stopped: 'cancelled' };
 
-    const action = parseAction(reply);
+    let action = parseAction(reply);
+    if (step === 0 && o.mustActFirst && action.kind === 'final') {
+      // One firm retry: describing what it would do is not doing it.
+      reply = await o.llm(
+        [
+          ...prompt,
+          { role: 'assistant', content: reply },
+          {
+            role: 'user',
+            content:
+              'You answered with words but did nothing. Do the task now: reply with ONE JSON object that calls a tool, like {"tool": "...", "args": {...}}.',
+          },
+        ],
+        { step },
+      );
+      if (o.cancelled?.()) return { final: 'Stopped.', steps: step, stopped: 'cancelled' };
+      action = parseAction(reply);
+    }
     if (action.kind === 'final') return { final: action.text, steps: step, stopped: 'done' };
 
     const tool = byName.get(action.tool);
@@ -174,4 +199,35 @@ export async function runAgent(o: RunOptions): Promise<RunResult> {
     steps: maxSteps,
     stopped: 'step-limit',
   };
+}
+
+/**
+ * A JSON Schema for the model's reply. A local model run with this schema as its
+ * output grammar cannot answer in prose: it must name a real tool with the right
+ * arguments, or (when allowed) give a final answer.
+ */
+export function replySchema(tools: ToolSpec[], allowFinal: boolean): object {
+  const calls = tools.map((t) => {
+    const names = Object.keys(t.args);
+    const properties: Record<string, object> = {};
+    for (const name of names) {
+      properties[name] = { type: t.integerArgs?.includes(name) ? 'integer' : 'string' };
+    }
+    return {
+      type: 'object',
+      properties: {
+        tool: { const: t.name },
+        args: { type: 'object', properties, required: names, additionalProperties: false },
+      },
+      required: ['tool', 'args'],
+      additionalProperties: false,
+    };
+  });
+  const final = {
+    type: 'object',
+    properties: { final: { type: 'string' } },
+    required: ['final'],
+    additionalProperties: false,
+  };
+  return { anyOf: allowFinal ? [...calls, final] : calls };
 }
